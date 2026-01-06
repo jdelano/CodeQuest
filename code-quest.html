@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Code Quest — C# Practice Game</title>
+<style>
+/* ---- Reset & layout ---- */
+:root{
+  --bg:#0b0f14;
+  --surface:#121824;
+  --surface-2:#0f141d;
+  --border:#223045;
+  --text:#f1f5f9;
+  --muted:#cbd5e1;
+  --muted-2:#94a3b8;
+  --accent:#f59e0b;
+  --accent-2:#fbbf24;
+  --good:#22c55e;
+  --bad:#f87171;
+}
+*{box-sizing:border-box;font-family:"Trebuchet MS","Gill Sans","Segoe UI",Tahoma,sans-serif;}
+body{margin:0; background:radial-gradient(circle at top,#111827 0%, #0b0f14 55%, #090d12 100%); color:var(--text); min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:28px;}
+.container{width:1080px; max-width:95%; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; overflow:hidden; display:grid; grid-template-columns: 320px 1fr;}
+.sidebar{padding:18px; background:var(--surface-2); border-right:1px solid var(--border);}
+.main{padding:18px;}
+h1{font-size:22px;margin:0 0 8px;color:var(--accent)}
+.small{font-size:13px;color:var(--muted)}
+.panel{background:var(--surface); padding:14px; border-radius:10px; margin-bottom:12px; border:1px solid var(--border);}
+.stat{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.progressBar{height:12px;background:#0b111a;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.progressFill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+.levelBadge{display:inline-block;padding:6px 10px;border-radius:999px;background:#0d1522;border:1px solid var(--border);font-weight:700;color:var(--text)}
+.startBtn{display:inline-block;background:var(--accent);color:#1a1202;padding:10px 14px;border-radius:8px;border:none;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(245,158,11,0.22)}
+.secondaryBtn{background:var(--surface-2);border:1px solid var(--border);padding:8px 10px;border-radius:8px;color:var(--text);cursor:pointer}
+.questionArea{min-height:260px}
+.codeBox{background:#0b1220;padding:12px;border-radius:8px;border:1px solid var(--border); font-family:"SFMono-Regular",Menlo,Consolas,monospace; font-size:13px; color:#f8fafc; white-space:pre-wrap;}
+.options{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.optionBtn{background:#0f1624;border:1px solid var(--border);padding:10px;border-radius:8px;cursor:pointer;text-align:left;color:var(--text)}
+.optionBtn:hover{border-color:#3a4b67}
+.optionBtn.correct{border-color:rgba(34,197,94,0.8);background:linear-gradient(90deg, rgba(34,197,94,0.15),transparent)}
+.optionBtn.wrong{border-color:rgba(248,113,113,0.8);background:linear-gradient(90deg, rgba(248,113,113,0.15),transparent)}
+.footer{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+.topRow{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+/* Badges */
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge{padding:8px 10px;border-radius:8px;background:#0f1725;border:1px solid var(--border);font-size:13px;color:var(--muted)}
+.badge.earned{background:#0b2218;border:1px solid #1f3a2a;box-shadow:0 6px 20px rgba(0,0,0,0.35);color:var(--good)}
+.center{display:flex;align-items:center;justify-content:center}
+.timer{font-weight:800;color:var(--text)}
+.hint{font-size:13px;color:var(--muted);margin-top:6px}
+.smallMuted{font-size:12px;color:var(--muted-2)}
+.exportBtn{background:transparent;border:none;color:var(--muted);text-decoration:underline;cursor:pointer}
+.levelUpAnim{position:fixed;left:50%;transform:translateX(-50%);top:18%;background:#101a26;padding:16px 20px;border-radius:12px;border:1px solid var(--border);box-shadow:0 12px 40px rgba(2,6,23,0.6);display:none;z-index:1000}
+.levelUpAnim.show{display:block;animation:pop .9s ease}
+@keyframes pop{0%{transform:translate(-50%, -10%) scale(0.8);opacity:0}60%{transform:translate(-50%, 4%) scale(1.05);opacity:1}100%{transform:translate(-50%,0) scale(1)}}
+.footer a{color:var(--muted)}
+.legend{font-size:12px;color:var(--muted-2);margin-top:8px}
+.streak{font-weight:800;color:#fbbf24}
+
+.startBtn:focus,.secondaryBtn:focus,.optionBtn:focus{outline:2px solid var(--accent-2);outline-offset:2px}
+.secondaryBtn:disabled{opacity:0.6;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="container" role="application" aria-label="Code Quest Game">
+  <div class="sidebar">
+    <h1>Code Quest</h1>
+    <div class="small">Sharpen C# skills with quick rounds. Predict output, find bugs, and choose the right fixes. Earn XP, badges, and climb levels.</div>
+
+    <div class="panel" aria-hidden="false" id="playerPanel">
+      <div class="stat"><div>Level</div><div id="level" class="levelBadge">1</div></div>
+      <div class="stat"><div>XP</div><div style="width:60%"><div class="progressBar"><div id="xpFill" class="progressFill" style="width:0%"></div></div></div><div style="width:36px;text-align:right;font-weight:700" id="xpText">0</div></div>
+      <div class="stat"><div>Streak</div><div class="streak" id="streak">0</div></div>
+      <div class="smallMuted" style="margin-top:8px">Tip: Answer quickly and correctly for XP multipliers.</div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="startBtn" id="startBtn">Start Round</button>
+        <button class="secondaryBtn" id="nextBtn" disabled>Skip (−5 XP)</button>
+      </div>
+      <div class="legend">Round length: 5 questions. Difficulty increases with level.</div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><strong>Badges</strong></div>
+        <div class="smallMuted">Earn 3 to 5 badges per level</div>
+      </div>
+      <div class="badges" id="badgesList" aria-live="polite">
+        <!-- badges inserted here -->
+      </div>
+      <div class="smallMuted" style="margin-top:8px">Badges unlock at milestones (streaks, speed, mastery).</div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><strong>Progress Export</strong></div>
+        <div><button class="secondaryBtn" id="exportBtn">Export</button></div>
+      </div>
+      <div class="smallMuted" style="margin-top:8px">Download a JSON snapshot of student progress for submission.</div>
+    </div>
+
+  </div>
+
+  <div class="main">
+    <div class="topRow">
+      <div>
+        <div class="small" id="roundInfo">Round: Idle</div>
+        <div class="smallMuted" id="difficultyHint">Difficulty: Easy</div>
+      </div>
+      <div class="center">
+        <div class="timer" id="timer">⏱ 00:00</div>
+      </div>
+    </div>
+
+    <div class="panel questionArea" id="questionPanel">
+      <div id="questionNumber" class="smallMuted">Press Start to begin.</div>
+      <div id="codeArea" class="codeBox" aria-live="polite">Welcome! Click <strong>Start Round</strong> to play.</div>
+      <div id="options" class="options" role="list"></div>
+      <div id="hint" class="hint"></div>
+    </div>
+
+    <div class="footer"></div>
+  </div>
+</div>
+
+<div class="levelUpAnim" id="levelUpAnim">
+  <div style="display:flex;gap:12px;align-items:center">
+    <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(180deg,#7dd3fc,#60a5fa);display:flex;align-items:center;justify-content:center;color:#042332;font-weight:800">★</div>
+    <div>
+      <div style="font-weight:800" id="levelUpText">Level Up!</div>
+      <div class="smallMuted" id="levelUpSub">You're now level X — new questions unlocked.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Game engine ======
+ - Self-contained.
+ - localStorage key: 'codequest.progress'
+ - Progress object: {name, level, xp, badges:{...}, streak, history:[]}
+ - Question pools defined below; easiest to edit/extend.
+*/
+
+// ---------- Utilities ----------
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const qs = s=>document.querySelector(s);
+const qsa = s=>Array.from(document.querySelectorAll(s));
+const now = ()=>Date.now();
+
+// ---------- Progress & persistence ----------
+const STORAGE_KEY = 'codequest.progress.v1';
+let progress = loadProgress();
+
+function defaultProgress(){
+  return {
+    name: 'Guest',
+    level: 1,
+    xp: 0,
+    badges: {},      // badgeId:true
+    streak: 0,
+    history: [],     // {qId,correct,timeTaken,levelAt}
+    bestStreak:0
+  };
+}
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultProgress();
+    return Object.assign(defaultProgress(), JSON.parse(raw));
+  }catch(e){ console.error(e); return defaultProgress(); }
+}
+function saveProgress(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  refreshUI();
+}
+function resetProgress(){
+  progress = defaultProgress();
+  saveProgress();
+  alert('Progress reset.');
+}
+
+// ---------- XP & leveling ----------
+function xpToNext(level){
+  // exponential-ish growth
+  return Math.round(50 * Math.pow(1.6, level-1));
+}
+function addXP(amount){
+  progress.xp += Math.max(0, amount);
+  // level up while xp exceeds threshold
+  while(progress.xp >= xpToNext(progress.level)){
+    progress.xp -= xpToNext(progress.level);
+    progress.level++;
+    showLevelUp(progress.level);
+  }
+  saveProgress();
+}
+
+// ---------- Badges ----------
+const BADGES = [
+  {id:'first_win', title:'First Win', desc:'Win your first round', check: p => p.history.some(h=>h.correct)},
+  {id:'streak_5', title:'Streak 5', desc:'5 correct in a row', check: p => p.bestStreak >= 5},
+  {id:'speedster', title:'Speedster', desc:'Answer a question under 5s', check: p => p.history.some(h=>h.timeTaken < 5000)},
+  {id:'level5', title:'Rising Dev', desc:'Reach level 5', check: p => p.level >= 5},
+  {id:'master_10', title:'Master 10', desc:'Reach level 10', check: p => p.level >= 10}
+];
+function evaluateBadges(){
+  BADGES.forEach(b=>{
+    if(!progress.badges[b.id] && b.check(progress)){
+      progress.badges[b.id] = true;
+      // small visual cue
+      showBadgeEarned(b);
+    }
+  });
+  saveProgress();
+}
+
+// ---------- UI refresh ----------
+function refreshUI(){
+  qs('#level').textContent = progress.level;
+  const pct = Math.round((progress.xp / xpToNext(progress.level))*100);
+  qs('#xpFill').style.width = pct + '%';
+  qs('#xpText').textContent = `${progress.xp}/${xpToNext(progress.level)}`;
+  qs('#streak').textContent = progress.streak;
+  // badges list
+  const badgesList = qs('#badgesList');
+  badgesList.innerHTML = '';
+  BADGES.forEach(b=>{
+    const el = document.createElement('div');
+    el.className = 'badge' + (progress.badges[b.id] ? ' earned' : '');
+    el.textContent = b.title + (progress.badges[b.id] ? ' ✓' : '');
+    el.title = b.desc;
+    badgesList.appendChild(el);
+  });
+}
+
+// ----- Level up animation -----
+function showLevelUp(level){
+  const box = qs('#levelUpAnim');
+  qs('#levelUpText').textContent = `Level Up!`;
+  qs('#levelUpSub').textContent = `You're now level ${level} — new questions unlocked.`;
+  box.classList.add('show');
+  setTimeout(()=>box.classList.remove('show'), 3200);
+}
+
+// ----- Badge earned -----
+function showBadgeEarned(badge){
+  // small toast-like alert
+  const el = document.createElement('div');
+  el.style.position='fixed';
+  el.style.right='18px';
+  el.style.top='18px';
+  el.style.background='linear-gradient(90deg,#052f2a,#0b3a2e)';
+  el.style.padding='10px 12px';
+  el.style.borderRadius='10px';
+  el.style.border='1px solid rgba(0,0,0,0.2)';
+  el.style.boxShadow='0 10px 30px rgba(2,6,23,0.6)';
+  el.style.zIndex=9999;
+  el.textContent = `🏅 Badge earned: ${badge.title}`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.style.opacity='0',2200);
+  setTimeout(()=>el.remove(),2600);
+}
+
+// ---------- Questions ----------
+/* Question schema:
+  {
+    id: 'q_x',
+    level: 1,            // base difficulty
+    type: 'output'|'bug'|'fix'|'multiple',
+    prompt: '... text ...',
+    code: '...c# snippet ...',
+    options: ['...','...'],
+    answerIndex: 0,
+    hint: '...'
+  }
+*/
+const QUESTIONS = [
+  // Level 1 (easy)
+  {
+    id:'q1',
+    level:1,
+    type:'output',
+    prompt:'What is the output of this C# program?',
+    code:`int a = 3;
+int b = 4;
+Console.WriteLine(a + b);`,
+    options:['3','4','7','34'],
+    answerIndex:2,
+    hint:'Remember + with ints adds numerically.'
+  },
+  {
+    id:'q2',
+    level:1,
+    type:'bug',
+    prompt:'There is a bug. What is the fix?',
+    code:`int[] arr = new int[3];
+arr[0] = 1;
+arr[1] = 2;
+arr[3] = 3; // <-- problem
+Console.WriteLine(arr.Length);`,
+    options:['Change arr[3] to arr[2]','Increase array size to 4','Replace int[] with List<int>','Remove arr[1] assignment'],
+    answerIndex:0,
+    hint:'Array indexes start at 0. For length 3, valid indexes are 0..2.'
+  },
+  {
+    id:'q3',
+    level:1,
+    type:'multiple',
+    prompt:'Which keyword creates a new object instance?',
+    code:'',
+    options:['class','new','static','void'],
+    answerIndex:1,
+    hint:'The operator that constructs an object.'
+  },
+
+  // Level 2 (medium)
+  {
+    id:'q4',
+    level:2,
+    type:'output',
+    prompt:'What prints?',
+    code:`int x = 2;
+for(int i = 0; i < 3; i++){
+  x += i;
+}
+Console.WriteLine(x);`,
+    options:['2','3','5','8'],
+    answerIndex:2,
+    hint:'i values: 0,1,2 → x increases by 0+1+2'
+  },
+  {
+    id:'q5',
+    level:2,
+    type:'bug',
+    prompt:'Why does this crash?',
+    code:`string s = null;
+if (s.Length > 0)
+  Console.WriteLine("has chars");`,
+    options:['s.Length invalid if null','C# requires braces','Use var instead of string','Missing semicolon'],
+    answerIndex:0,
+    hint:'Dereferencing a null reference.'
+  },
+
+  // Level 3 (harder)
+  {
+    id:'q6',
+    level:3,
+    type:'output',
+    prompt:'What prints?',
+    code:`int[] a = {1,2,3};
+int sum = 0;
+foreach(var v in a){
+  sum += v;
+  if(v==2) break;
+}
+Console.WriteLine(sum);`,
+    options:['1','3','6','5'],
+    answerIndex:1, // 1+2=3
+    hint:'Loop breaks early on value 2.'
+  },
+  {
+    id:'q7',
+    level:3,
+    type:'fix',
+    prompt:'Pick the line that best fixes this code to compile:',
+    code:`class Person {
+  public string Name { get; set; }
+}
+var p = new Person { Name = "Ada" };
+Console.WriteLine(p.Name);`,
+    options:['Add "using System;"','Wrap last three lines in a method','Change var to Person','Make class public static'],
+    answerIndex:1,
+    hint:'You can\'t have top-level statements inside a class file without C# top-level program support in older projects — the safest generic fix is to put statements inside a method or Main.'
+  },
+
+  // Advanced examples (level 4+)
+  {
+    id:'q8',
+    level:4,
+    type:'output',
+    prompt:'What prints?',
+    code:`int x = 1;
+int y = x++;
+Console.WriteLine(x);
+Console.WriteLine(y);`,
+    options:['1 and 1','2 and 1','1 and 2','2 and 2'],
+    answerIndex:1,
+    hint:'post-increment returns old value then increments variable.'
+  },
+  {
+    id:'q9',
+    level:4,
+    type:'bug',
+    prompt:'Why is this wrong logically?',
+    code:`int[] arr = {3,1,2};
+Array.Sort(arr);
+if(arr[0] == 1) Console.WriteLine("sorted");`,
+    options:['arr[0] will be 1 after sort','Array.Sort sorts ascending','Check should be arr[0]==1','arr[0] will be 1, so the code is fine'],
+    answerIndex:3,
+    hint:'Tricky distractors — pick the honest one: code is fine logically.'
+  },
+  // ====== LEVEL 1 (Easy) ======
+{
+  id:'q10', level:1, type:'output',
+  prompt:'What prints?',
+  code:`int x = 5;
+Console.WriteLine(x * 2);`,
+  options:['5','7','10','52'],
+  answerIndex:2,
+  hint:'Multiplication happens before printing.'
+},
+{
+  id:'q11', level:1, type:'output',
+  prompt:'What is the output?',
+  code:`int a = 10;
+a -= 3;
+Console.WriteLine(a);`,
+  options:['7','10','13','-3'],
+  answerIndex:0,
+  hint:'Compound assignment subtracts first.'
+},
+{
+  id:'q12', level:1, type:'multiple',
+  prompt:'Which type stores whole numbers?',
+  code:'',
+  options:['double','string','int','bool'],
+  answerIndex:2,
+  hint:'Think integers.'
+},
+{
+  id:'q13', level:1, type:'output',
+  prompt:'What prints?',
+  code:`Console.WriteLine(8 / 2);`,
+  options:['4','4.0','2','Error'],
+  answerIndex:0,
+  hint:'Integer division with whole numbers.'
+},
+{
+  id:'q14', level:1, type:'bug',
+  prompt:'Why does this not compile?',
+  code:`int x = "5";`,
+  options:[
+    'Cannot convert string to int',
+    'Missing semicolon',
+    'Use var instead',
+    'x must be public'
+  ],
+  answerIndex:0,
+  hint:'Type mismatch.'
+},
+
+// ====== LEVEL 2 (Loops & Conditionals) ======
+{
+  id:'q15', level:2, type:'output',
+  prompt:'What prints?',
+  code:`int sum = 0;
+for(int i=1;i<=3;i++){
+  sum += i;
+}
+Console.WriteLine(sum);`,
+  options:['3','6','7','0'],
+  answerIndex:1,
+  hint:'1 + 2 + 3'
+},
+{
+  id:'q16', level:2, type:'output',
+  prompt:'What prints?',
+  code:`int x = 5;
+if(x > 10)
+  Console.WriteLine("A");
+else
+  Console.WriteLine("B");`,
+  options:['A','B','Nothing','Error'],
+  answerIndex:1,
+  hint:'Condition is false.'
+},
+{
+  id:'q17', level:2, type:'bug',
+  prompt:'What causes the runtime error?',
+  code:`int[] a = new int[2];
+a[0] = 1;
+a[1] = 2;
+a[2] = 3;`,
+  options:[
+    'Index out of range',
+    'Array not initialized',
+    'Missing using',
+    'Wrong type'
+  ],
+  answerIndex:0,
+  hint:'Indexes go from 0 to Length-1.'
+},
+{
+  id:'q18', level:2, type:'output',
+  prompt:'What prints?',
+  code:`int x = 0;
+while(x < 3){
+  Console.Write(x);
+  x++;
+}`,
+  options:['012','123','03','Error'],
+  answerIndex:0,
+  hint:'Print happens before increment.'
+},
+{
+  id:'q19', level:2, type:'multiple',
+  prompt:'Which loop is best when the number of iterations is unknown?',
+  code:'',
+  options:['for','foreach','while','switch'],
+  answerIndex:2,
+  hint:'Think condition-based.'
+},
+
+// ====== LEVEL 3 (Methods & References) ======
+{
+  id:'q20', level:3, type:'output',
+  prompt:'What prints?',
+  code:`void AddOne(int x){
+  x++;
+}
+int a = 5;
+AddOne(a);
+Console.WriteLine(a);`,
+  options:['5','6','Error','0'],
+  answerIndex:0,
+  hint:'Parameters are passed by value.'
+},
+{
+  id:'q21', level:3, type:'output',
+  prompt:'What prints?',
+  code:`int[] a = {1,2,3};
+a[0] = 9;
+Console.WriteLine(a[0]);`,
+  options:['1','2','3','9'],
+  answerIndex:3,
+  hint:'Arrays are reference types.'
+},
+{
+  id:'q22', level:3, type:'bug',
+  prompt:'Why does this not compile?',
+  code:`void DoIt(){
+  return 5;
+}`,
+  options:[
+    'Void methods cannot return values',
+    'Missing semicolon',
+    'Wrong access modifier',
+    'Needs static'
+  ],
+  answerIndex:0,
+  hint:'Void means no return value.'
+},
+{
+  id:'q23', level:3, type:'multiple',
+  prompt:'Which keyword allows a method to return a value?',
+  code:'',
+  options:['void','return','static','new'],
+  answerIndex:1,
+  hint:'It sends a value back.'
+},
+{
+  id:'q24', level:3, type:'output',
+  prompt:'What prints?',
+  code:`int x = 3;
+Console.WriteLine(x == 3);`,
+  options:['true','false','3','Error'],
+  answerIndex:0,
+  hint:'== is comparison.'
+},
+
+// ====== LEVEL 4 (Classes & Objects) ======
+{
+  id:'q25', level:4, type:'output',
+  prompt:'What prints?',
+  code:`class A {
+  public int X = 5;
+}
+var a = new A();
+a.X = 7;
+Console.WriteLine(a.X);`,
+  options:['5','7','0','Error'],
+  answerIndex:1,
+  hint:'You changed the field.'
+},
+{
+  id:'q26', level:4, type:'multiple',
+  prompt:'What does a constructor do?',
+  code:'',
+  options:[
+    'Destroys an object',
+    'Initializes an object',
+    'Returns a value',
+    'Makes a class static'
+  ],
+  answerIndex:1,
+  hint:'Runs when you create an object.'
+},
+{
+  id:'q27', level:4, type:'bug',
+  prompt:'Why does this fail?',
+  code:`class Car {
+  string Model;
+}
+var c = new Car();
+Console.WriteLine(c.Model);`,
+  options:[
+    'Model is private',
+    'Model is null',
+    'Class must be static',
+    'Console.WriteLine is wrong'
+  ],
+  answerIndex:0,
+  hint:'Fields default to private.'
+},
+{
+  id:'q28', level:4, type:'output',
+  prompt:'What prints?',
+  code:`class A {
+  public int X;
+}
+A a1 = new A();
+A a2 = a1;
+a2.X = 5;
+Console.WriteLine(a1.X);`,
+  options:['0','5','Error','null'],
+  answerIndex:1,
+  hint:'Both reference the same object.'
+},
+{
+  id:'q29', level:4, type:'multiple',
+  prompt:'Which is true about properties?',
+  code:'',
+  options:[
+    'They must be static',
+    'They can have get/set',
+    'They cannot be public',
+    'They replace methods'
+  ],
+  answerIndex:1,
+  hint:'Encapsulation.'
+},
+
+// ====== LEVEL 5 (Collections & Exceptions) ======
+{
+  id:'q30', level:5, type:'output',
+  prompt:'What prints?',
+  code:`var list = new List<int>{1,2,3};
+list.Add(4);
+Console.WriteLine(list.Count);`,
+  options:['3','4','5','Error'],
+  answerIndex:1,
+  hint:'Count increases after Add.'
+},
+{
+  id:'q31', level:5, type:'bug',
+  prompt:'What causes the exception?',
+  code:`List<int> nums = null;
+nums.Add(3);`,
+  options:[
+    'NullReferenceException',
+    'IndexOutOfRangeException',
+    'Compile error',
+    'InvalidCastException'
+  ],
+  answerIndex:0,
+  hint:'Calling a method on null.'
+},
+{
+  id:'q32', level:5, type:'multiple',
+  prompt:'Which collection enforces unique values?',
+  code:'',
+  options:['List','Array','Dictionary','HashSet'],
+  answerIndex:3,
+  hint:'No duplicates allowed.'
+},
+{
+  id:'q33', level:5, type:'output',
+  prompt:'What prints?',
+  code:`try{
+  int x = int.Parse("abc");
+}catch{
+  Console.Write("X");
+}
+Console.Write("Y");`,
+  options:['X','Y','XY','Error'],
+  answerIndex:2,
+  hint:'Exception triggers catch.'
+},
+{
+  id:'q34', level:5, type:'multiple',
+  prompt:'What does LINQ stand for?',
+  code:'',
+  options:[
+    'Linked Integer Query',
+    'Language Integrated Query',
+    'Local Index Query',
+    'List Interface Queue'
+  ],
+  answerIndex:1,
+  hint:'Built into the language.'
+},
+
+// ====== LEVEL 6 (Advanced Reasoning) ======
+{
+  id:'q35', level:6, type:'output',
+  prompt:'What prints?',
+  code:`int x = 1;
+if(x++ > 1)
+  Console.Write("A");
+else
+  Console.Write("B");`,
+  options:['A','B','Nothing','Error'],
+  answerIndex:1,
+  hint:'Post-increment happens after comparison.'
+},
+{
+  id:'q36', level:6, type:'output',
+  prompt:'What prints?',
+  code:`bool a = true;
+bool b = false;
+Console.WriteLine(a || b && false);`,
+  options:['true','false','Error','Depends'],
+  answerIndex:0,
+  hint:'&& has higher precedence than ||.'
+},
+{
+  id:'q37', level:6, type:'bug',
+  prompt:'What is logically wrong?',
+  code:`if(x = 5){
+  Console.WriteLine("Hi");
+}`,
+  options:[
+    'Assignment instead of comparison',
+    'Missing semicolon',
+    'if cannot contain Console',
+    'x must be bool'
+  ],
+  answerIndex:0,
+  hint:'Use == for comparison.'
+},
+{
+  id:'q38', level:6, type:'multiple',
+  prompt:'Which best describes polymorphism?',
+  code:'',
+  options:[
+    'Multiple variables',
+    'Multiple forms of behavior',
+    'Multiple constructors',
+    'Multiple files'
+  ],
+  answerIndex:1,
+  hint:'Same interface, different behavior.'
+},
+{
+  id:'q39', level:6, type:'output',
+  prompt:'What prints?',
+  code:`int[] a = {1,2,3};
+Console.WriteLine(a.Length > 3 ? "Yes" : "No");`,
+  options:['Yes','No','Error','null'],
+  answerIndex:1,
+  hint:'Length is exactly 3.'
+}
+];
+
+// random select based on current difficulty
+function chooseQuestionByLevel(playerLevel){
+  // aim to give questions with level <= playerLevel+1
+  const maxLevel = clamp(playerLevel + 1, 1, 10);
+  const pool = QUESTIONS.filter(q => q.level <= maxLevel);
+  if(pool.length === 0) return null;
+  // simple weighted pick: prefer questions near player's level
+  const weighted = [];
+  pool.forEach(q=>{
+    const weight = 1 + Math.max(0, 3 - Math.abs(q.level - playerLevel));
+    for(let i=0;i<weight;i++) weighted.push(q);
+  });
+  return JSON.parse(JSON.stringify(weighted[Math.floor(Math.random()*weighted.length)]));
+}
+
+// ---------- Round logic ----------
+let currentRound = null;
+const ROUND_SIZE = 5;
+
+function newRound(){
+  currentRound = {
+    questions: [],
+    index: 0,
+    startedAt: now(),
+    correct: 0,
+    totalTime: 0
+  };
+  for(let i=0;i<ROUND_SIZE;i++){
+    const q = chooseQuestionByLevel(progress.level);
+    if(q) currentRound.questions.push(q);
+  }
+  qs('#roundInfo').textContent = `Round: In progress`;
+  qs('#difficultyHint').textContent = `Difficulty: Level ${progress.level} (content up to ${progress.level+1})`;
+  qs('#nextBtn').disabled = false;
+  startQuestion(0);
+  startTimer();
+}
+
+function endRound(){
+  qs('#roundInfo').textContent = `Round: Completed — Score: ${currentRound.correct}/${ROUND_SIZE}`;
+  // award XP: base 20 per correct, bonus for streaks and speed
+  const base = currentRound.correct * 20;
+  const timeBonus = Math.max(0, Math.round((ROUND_SIZE*15 - (currentRound.totalTime/1000)))); // faster => bonus
+  const streakBonus = progress.streak * 2;
+  const totalXP = Math.max(0, base + timeBonus + streakBonus);
+  addXP(totalXP);
+  // record to history each question already done
+  currentRound.questions.forEach(q=>{
+    // already stored individually
+  });
+  // evaluate badges
+  evaluateBadges();
+  // disable skip
+  qs('#nextBtn').disabled = true;
+  stopTimer();
+  saveProgress();
+  showRoundSummary(totalXP);
+}
+
+function showRoundSummary(xp){
+  alert(`Round finished!\nCorrect: ${currentRound.correct}/${ROUND_SIZE}\nXP earned: ${xp}\nLevel: ${progress.level}`);
+}
+
+// ---------- Question presentation ----------
+function startQuestion(idx){
+  if(!currentRound) return;
+  if(idx >= currentRound.questions.length){
+    endRound();
+    return;
+  }
+  currentRound.index = idx;
+  const q = currentRound.questions[idx];
+  qs('#questionNumber').textContent = `Question ${idx+1} / ${currentRound.questions.length}`;
+  qs('#codeArea').innerHTML = `<strong>${escapeHtml(q.prompt)}</strong>\n\n<pre>${escapeHtml(q.code)}</pre>`;
+  // create options (shuffle)
+  const opts = shuffleArray(q.options.map((o,i)=>({o,i})));
+  const container = qs('#options');
+  container.innerHTML = '';
+  opts.forEach(choice=>{
+    const btn = document.createElement('button');
+    btn.className = 'optionBtn';
+    btn.textContent = choice.o;
+    btn.onclick = ()=>handleAnswer(q, choice.i, btn);
+    container.appendChild(btn);
+  });
+  qs('#hint').textContent = q.hint || '';
+}
+
+// handle answer
+function handleAnswer(q, selectedIndex, btnElement){
+  const qStart = questionStartTime || now();
+  const timeTaken = now() - qStart;
+  const correct = selectedIndex === q.answerIndex;
+  // visual feedback
+  qsa('.optionBtn').forEach(b=>b.disabled=true);
+  if(correct){
+    btnElement.classList.add('correct');
+    progress.streak = (progress.streak || 0) + 1;
+    progress.bestStreak = Math.max(progress.bestStreak || 0, progress.streak);
+    currentRound.correct++;
+    // compute XP for this question: base + speed bonus + streak multiplier
+    const baseXP = 10 + (q.level * 2);
+    const speedBonus = Math.max(0, Math.round(10 - timeTaken/1000)); // faster => up to +10
+    const streakMultiplier = 1 + Math.min(0.5, (progress.streak/10));
+    const xpGain = Math.round((baseXP + speedBonus) * streakMultiplier);
+    addXP(xpGain);
+  } else {
+    btnElement.classList.add('wrong');
+    // reveal correct button
+    qsa('.optionBtn').forEach(b=>{
+      // find the one that is correct: match text to correct option
+      if(b.textContent === q.options[q.answerIndex]) b.classList.add('correct');
+    });
+    progress.streak = 0;
+  }
+
+  // record history
+  progress.history.push({ qId: q.id, correct, timeTaken, levelAt: progress.level, ts: now() });
+  currentRound.totalTime += timeTaken;
+  saveProgress();
+
+  // move to next question after short delay
+  setTimeout(()=>{
+    startQuestion(currentRound.index + 1);
+  }, 900);
+}
+
+// skip question
+function skipQuestion(){
+  if(!currentRound) return;
+  // penalty
+  progress.xp = Math.max(0, progress.xp - 5);
+  progress.streak = 0;
+  saveProgress();
+  startQuestion(currentRound.index + 1);
+}
+
+// ---- Timer (round duration) ----
+let globalTimer = null;
+let questionStartTime = null;
+function startTimer(){
+  let elapsed = 0;
+  questionStartTime = now();
+  if(globalTimer) clearInterval(globalTimer);
+  globalTimer = setInterval(()=>{
+    elapsed = Math.floor((now() - currentRound.startedAt)/1000);
+    const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
+    const ss = String(elapsed%60).padStart(2,'0');
+    qs('#timer').textContent = `⏱ ${mm}:${ss}`;
+    questionStartTime = now(); // resets for time measurement of current question
+  }, 1000);
+}
+function stopTimer(){
+  if(globalTimer) { clearInterval(globalTimer); globalTimer = null; }
+  qs('#timer').textContent = '⏱ 00:00';
+}
+
+// ---------- Helpers ----------
+function shuffleArray(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]] } return a; }
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---------- UI wiring ----------
+qs('#startBtn').addEventListener('click', ()=>{
+  newRound();
+});
+qs('#nextBtn').addEventListener('click', ()=>{
+  if(confirm('Skip question? This costs 5 XP.')) skipQuestion();
+});
+qs('#exportBtn').addEventListener('click', ()=>{
+  const data = JSON.stringify(progress, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (progress.name||'student') + '-codequest-progress.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// on load
+refreshUI();
+
+/* ----- Initialization: ask for player name once (non-blocking) ----- */
+setTimeout(()=>{
+  const n = prompt('Enter player name (this saves locally) — leave blank to stay Guest:', progress.name);
+  if(n !== null && n.trim() !== ''){
+    progress.name = n.trim();
+    saveProgress();
+  } else {
+    refreshUI();
+  }
+}, 700);
+
+/* Accessibility: keyboard answer with 1..5 */
+document.addEventListener('keydown', (ev)=>{
+  if(ev.key >= '1' && ev.key <= '5'){
+    const idx = parseInt(ev.key)-1;
+    const opts = qsa('.optionBtn');
+    if(opts[idx]) opts[idx].click();
+  }
+});
+
+/* initial badges evaluation (if loaded progress meets new badge rules) */
+evaluateBadges();
+refreshUI();
+
+</script>
+</body>
+</html>
