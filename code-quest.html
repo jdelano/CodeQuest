@@ -156,7 +156,6 @@ let progress = loadProgress();
 
 function defaultProgress(){
   return {
-    name: 'Guest',
     level: 1,
     xp: 0,
     badges: {},      // badgeId:true
@@ -169,7 +168,9 @@ function loadProgress(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return defaultProgress();
-    return Object.assign(defaultProgress(), JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    delete parsed.name;
+    return Object.assign(defaultProgress(), parsed);
   }catch(e){ console.error(e); return defaultProgress(); }
 }
 function saveProgress(){
@@ -268,7 +269,7 @@ function showBadgeEarned(badge){
 /* Question schema:
   {
     id: 'q_x',
-    level: 1,            // base difficulty
+    level: 1,            // chapter number (1-8)
     type: 'output'|'bug'|'fix'|'multiple',
     prompt: '... text ...',
     code: '...c# snippet ...',
@@ -278,7 +279,7 @@ function showBadgeEarned(badge){
   }
 */
 const QUESTIONS = [
-  // Level 1 (easy)
+  // Chapter 1 (Basics)
   {
     id:'q1',
     level:1,
@@ -293,7 +294,7 @@ Console.WriteLine(a + b);`,
   },
   {
     id:'q2',
-    level:1,
+    level:7,
     type:'bug',
     prompt:'There is a bug. What is the fix?',
     code:`int[] arr = new int[3];
@@ -307,7 +308,7 @@ Console.WriteLine(arr.Length);`,
   },
   {
     id:'q3',
-    level:1,
+    level:2,
     type:'multiple',
     prompt:'Which keyword creates a new object instance?',
     code:'',
@@ -316,10 +317,10 @@ Console.WriteLine(arr.Length);`,
     hint:'The operator that constructs an object.'
   },
 
-  // Level 2 (medium)
+  // Chapter 4 (Loops)
   {
     id:'q4',
-    level:2,
+    level:4,
     type:'output',
     prompt:'What prints?',
     code:`int x = 2;
@@ -331,9 +332,11 @@ Console.WriteLine(x);`,
     answerIndex:2,
     hint:'i values: 0,1,2 → x increases by 0+1+2'
   },
+
+  // Chapter 1 (Basics)
   {
     id:'q5',
-    level:2,
+    level:1,
     type:'bug',
     prompt:'Why does this crash?',
     code:`string s = null;
@@ -344,10 +347,10 @@ if (s.Length > 0)
     hint:'Dereferencing a null reference.'
   },
 
-  // Level 3 (harder)
+  // Chapter 7 (Arrays & Lists)
   {
     id:'q6',
-    level:3,
+    level:7,
     type:'output',
     prompt:'What prints?',
     code:`int[] a = {1,2,3};
@@ -361,9 +364,11 @@ Console.WriteLine(sum);`,
     answerIndex:1, // 1+2=3
     hint:'Loop breaks early on value 2.'
   },
+
+  // Chapter 2 (Classes & Properties)
   {
     id:'q7',
-    level:3,
+    level:2,
     type:'fix',
     prompt:'Pick the line that best fixes this code to compile:',
     code:`class Person {
@@ -376,10 +381,10 @@ Console.WriteLine(p.Name);`,
     hint:'You can\'t have top-level statements inside a class file without C# top-level program support in older projects — the safest generic fix is to put statements inside a method or Main.'
   },
 
-  // Advanced examples (level 4+)
+  // Chapter 1 (Basics)
   {
     id:'q8',
-    level:4,
+    level:1,
     type:'output',
     prompt:'What prints?',
     code:`int x = 1;
@@ -390,9 +395,11 @@ Console.WriteLine(y);`,
     answerIndex:1,
     hint:'post-increment returns old value then increments variable.'
   },
+
+  // Chapter 7 (Arrays & Lists)
   {
     id:'q9',
-    level:4,
+    level:7,
     type:'bug',
     prompt:'Why is this wrong logically?',
     code:`int[] arr = {3,1,2};
@@ -402,7 +409,7 @@ if(arr[0] == 1) Console.WriteLine("sorted");`,
     answerIndex:3,
     hint:'Tricky distractors — pick the honest one: code is fine logically.'
   },
-  // ====== LEVEL 1 (Easy) ======
+  // ====== CHAPTER 1 (Basics) ======
 {
   id:'q10', level:1, type:'output',
   prompt:'What prints?',
@@ -451,10 +458,114 @@ Console.WriteLine(a);`,
   answerIndex:0,
   hint:'Type mismatch.'
 },
-
-// ====== LEVEL 2 (Loops & Conditionals) ======
 {
-  id:'q15', level:2, type:'output',
+  id:'q40', level:1, type:'output',
+  prompt:'What prints?',
+  code:`Console.Write("A");
+Console.Write("B");`,
+  options:['A then B on new lines','AB on one line','A only','B only'],
+  answerIndex:1,
+  hint:'Write does not add a new line.'
+},
+{
+  id:'q41', level:1, type:'output',
+  prompt:'What prints?',
+  code:`Console.WriteLine("A");
+Console.Write("B");`,
+  options:['AB on one line','A then B on new lines','A only','B only'],
+  answerIndex:1,
+  hint:'WriteLine adds a new line after A.'
+},
+{
+  id:'q42', level:1, type:'multiple',
+  prompt:'Which line reads a line of input from the user?',
+  code:'',
+  options:['Console.ReadLine()','Console.WriteLine()','Console.Write()','Console.Read()'],
+  answerIndex:0,
+  hint:'It returns a string.'
+},
+{
+  id:'q43', level:1, type:'output',
+  prompt:'What prints?',
+  code:`int x = 5 / 2;
+Console.WriteLine(x);`,
+  options:['2','2.5','3','Error'],
+  answerIndex:0,
+  hint:'Integer division drops the remainder.'
+},
+{
+  id:'q44', level:1, type:'output',
+  prompt:'What prints?',
+  code:`double x = 5 / 2;
+Console.WriteLine(x);`,
+  options:['2','2.5','3','Error'],
+  answerIndex:0,
+  hint:'Both operands are ints, so division happens first.'
+},
+{
+  id:'q45', level:1, type:'multiple',
+  prompt:'Which type is best for decimal values like 3.14?',
+  code:'',
+  options:['int','bool','double','string'],
+  answerIndex:2,
+  hint:'Floating-point type.'
+},
+{
+  id:'q46', level:1, type:'multiple',
+  prompt:'Which statement declares an integer variable named count?',
+  code:'',
+  options:['int count = 0;','string count = 0;','bool count = 0;','double count = "0";'],
+  answerIndex:0,
+  hint:'Type and value must match.'
+},
+{
+  id:'q47', level:1, type:'output',
+  prompt:'What prints?',
+  code:`string name = "Ada";
+Console.WriteLine($"Hi {name}");`,
+  options:['Hi Ada','Hi {name}','Hi "Ada"','Error'],
+  answerIndex:0,
+  hint:'$"..." inserts variables inside braces.'
+},
+{
+  id:'q48', level:1, type:'multiple',
+  prompt:'Which line uses string interpolation correctly?',
+  code:'',
+  options:['Console.WriteLine($"Score: {score}");','Console.WriteLine("Score: {score}");','Console.WriteLine($Score: {score});','Console.WriteLine($"Score: score");'],
+  answerIndex:0,
+  hint:'Use $ before the string and braces around the variable.'
+},
+{
+  id:'q49', level:1, type:'output',
+  prompt:'What prints?',
+  code:`int a = 3;
+int b = 4;
+Console.WriteLine($"{a} + {b} = {a + b}");`,
+  options:['3 + 4 = 7','{a} + {b} = {a + b}','3 + 4 = 34','Error'],
+  answerIndex:0,
+  hint:'Expressions inside braces are evaluated.'
+},
+{
+  id:'q50', level:1, type:'multiple',
+  prompt:'What does the $ do in $"Value: {x}"?',
+  code:'',
+  options:['Enables string interpolation','Marks a verbatim string','Converts to uppercase','Concatenates strings'],
+  answerIndex:0,
+  hint:'It lets braces insert values.'
+},
+{
+  id:'q51', level:1, type:'output',
+  prompt:'What prints?',
+  code:`int x = 5;
+Console.WriteLine($"x is {x}");`,
+  options:['x is 5','x is {x}','x is "5"','Error'],
+  answerIndex:0,
+  hint:'The variable value is inserted.'
+},
+
+// ====== CHAPTER 4 (Loops) ======
+{
+  id:'q15', level:4, type:'output',
   prompt:'What prints?',
   code:`int sum = 0;
 for(int i=1;i<=3;i++){
@@ -465,8 +576,10 @@ Console.WriteLine(sum);`,
   answerIndex:1,
   hint:'1 + 2 + 3'
 },
+
+// ====== CHAPTER 3 (Decision Structures) ======
 {
-  id:'q16', level:2, type:'output',
+  id:'q16', level:3, type:'output',
   prompt:'What prints?',
   code:`int x = 5;
 if(x > 10)
@@ -477,8 +590,10 @@ else
   answerIndex:1,
   hint:'Condition is false.'
 },
+
+// ====== CHAPTER 7 (Arrays & Lists) ======
 {
-  id:'q17', level:2, type:'bug',
+  id:'q17', level:7, type:'bug',
   prompt:'What causes the runtime error?',
   code:`int[] a = new int[2];
 a[0] = 1;
@@ -493,8 +608,10 @@ a[2] = 3;`,
   answerIndex:0,
   hint:'Indexes go from 0 to Length-1.'
 },
+
+// ====== CHAPTER 4 (Loops) ======
 {
-  id:'q18', level:2, type:'output',
+  id:'q18', level:4, type:'output',
   prompt:'What prints?',
   code:`int x = 0;
 while(x < 3){
@@ -506,7 +623,7 @@ while(x < 3){
   hint:'Print happens before increment.'
 },
 {
-  id:'q19', level:2, type:'multiple',
+  id:'q19', level:4, type:'multiple',
   prompt:'Which loop is best when the number of iterations is unknown?',
   code:'',
   options:['for','foreach','while','switch'],
@@ -514,9 +631,77 @@ while(x < 3){
   hint:'Think condition-based.'
 },
 
-// ====== LEVEL 3 (Methods & References) ======
+// ====== CHAPTER 5 (Scope, Random, Static, Enums) ======
 {
-  id:'q20', level:3, type:'output',
+  id:'q52', level:5, type:'bug',
+  prompt:'Why does this not compile?',
+  code:`if(true){
+  int y = 3;
+}
+Console.WriteLine(y);`,
+  options:[
+    'y is out of scope',
+    'Missing semicolon',
+    'Console.WriteLine is wrong',
+    'y must be static'
+  ],
+  answerIndex:0,
+  hint:'Variables declared in a block only exist inside that block.'
+},
+{
+  id:'q53', level:5, type:'multiple',
+  prompt:'Which line produces a random number from 1 to 3?',
+  code:'',
+  options:['r.Next(1,4)','r.Next(1,3)','r.Next(4)','r.Next(0,3)'],
+  answerIndex:0,
+  hint:'Next(min, max) is inclusive of min, exclusive of max.'
+},
+{
+  id:'q54', level:5, type:'multiple',
+  prompt:'How do you access a static field named Count on class Counter?',
+  code:'',
+  options:['Counter.Count','new Counter().Count','Count.Counter','static Counter.Count'],
+  answerIndex:0,
+  hint:'Static members are accessed on the class.'
+},
+{
+  id:'q55', level:5, type:'output',
+  prompt:'What prints?',
+  code:`enum Day { Mon, Tue }
+Day d = Day.Mon;
+Console.WriteLine(d);`,
+  options:['Mon','0','Day.Mon','Error'],
+  answerIndex:0,
+  hint:'Enums print the name by default.'
+},
+{
+  id:'q56', level:5, type:'bug',
+  prompt:'Why does this not compile?',
+  code:`for(int i = 0; i < 3; i++){
+  // loop
+}
+Console.WriteLine(i);`,
+  options:[
+    'i is out of scope',
+    'i must be static',
+    'Missing braces',
+    'i is not initialized'
+  ],
+  answerIndex:0,
+  hint:'Loop variables are scoped to the loop.'
+},
+{
+  id:'q57', level:5, type:'multiple',
+  prompt:'Which line gives a random integer from 0 to 9?',
+  code:'',
+  options:['r.Next(10)','r.Next(0,9)','r.Next(1,10)','r.Next(9)'],
+  answerIndex:0,
+  hint:'Upper bound is exclusive.'
+},
+
+// ====== CHAPTER 6 (Creating Methods) ======
+{
+  id:'q20', level:6, type:'output',
   prompt:'What prints?',
   code:`void AddOne(int x){
   x++;
@@ -529,7 +714,7 @@ Console.WriteLine(a);`,
   hint:'Parameters are passed by value.'
 },
 {
-  id:'q21', level:3, type:'output',
+  id:'q21', level:7, type:'output',
   prompt:'What prints?',
   code:`int[] a = {1,2,3};
 a[0] = 9;
@@ -539,7 +724,7 @@ Console.WriteLine(a[0]);`,
   hint:'Arrays are reference types.'
 },
 {
-  id:'q22', level:3, type:'bug',
+  id:'q22', level:6, type:'bug',
   prompt:'Why does this not compile?',
   code:`void DoIt(){
   return 5;
@@ -554,13 +739,47 @@ Console.WriteLine(a[0]);`,
   hint:'Void means no return value.'
 },
 {
-  id:'q23', level:3, type:'multiple',
+  id:'q23', level:6, type:'multiple',
   prompt:'Which keyword allows a method to return a value?',
   code:'',
   options:['void','return','static','new'],
   answerIndex:1,
   hint:'It sends a value back.'
 },
+{
+  id:'q63', level:6, type:'output',
+  prompt:'What prints?',
+  code:`int Add(int a, int b){
+  return a + b;
+}
+Console.WriteLine(Add(2, 3));`,
+  options:['5','23','Error','0'],
+  answerIndex:0,
+  hint:'Methods can return values.'
+},
+{
+  id:'q64', level:6, type:'multiple',
+  prompt:'Which line creates a delegate variable named op?',
+  code:'',
+  options:[
+    'Func<int,int,int> op = (a,b) => a + b;',
+    'op = Func<int,int,int>();',
+    'Func op = (a,b) => a + b;',
+    'delegate op(int a, int b)'
+  ],
+  answerIndex:0,
+  hint:'Func<T1,T2,TResult> is a built-in delegate type.'
+},
+{
+  id:'q65', level:6, type:'multiple',
+  prompt:'Which is a lambda expression?',
+  code:'',
+  options:['x => x * 2','x * 2','lambda x = x * 2','(x) { return x*2; }'],
+  answerIndex:0,
+  hint:'Lambda uses =>.'
+},
+
+// ====== CHAPTER 3 (Decision Structures) ======
 {
   id:'q24', level:3, type:'output',
   prompt:'What prints?',
@@ -571,9 +790,9 @@ Console.WriteLine(x == 3);`,
   hint:'== is comparison.'
 },
 
-// ====== LEVEL 4 (Classes & Objects) ======
+// ====== CHAPTER 2 (Classes & Properties) ======
 {
-  id:'q25', level:4, type:'output',
+  id:'q25', level:2, type:'output',
   prompt:'What prints?',
   code:`class A {
   public int X = 5;
@@ -586,7 +805,7 @@ Console.WriteLine(a.X);`,
   hint:'You changed the field.'
 },
 {
-  id:'q26', level:4, type:'multiple',
+  id:'q26', level:2, type:'multiple',
   prompt:'What does a constructor do?',
   code:'',
   options:[
@@ -599,7 +818,7 @@ Console.WriteLine(a.X);`,
   hint:'Runs when you create an object.'
 },
 {
-  id:'q27', level:4, type:'bug',
+  id:'q27', level:2, type:'bug',
   prompt:'Why does this fail?',
   code:`class Car {
   string Model;
@@ -616,7 +835,7 @@ Console.WriteLine(c.Model);`,
   hint:'Fields default to private.'
 },
 {
-  id:'q28', level:4, type:'output',
+  id:'q28', level:2, type:'output',
   prompt:'What prints?',
   code:`class A {
   public int X;
@@ -630,7 +849,7 @@ Console.WriteLine(a1.X);`,
   hint:'Both reference the same object.'
 },
 {
-  id:'q29', level:4, type:'multiple',
+  id:'q29', level:2, type:'multiple',
   prompt:'Which is true about properties?',
   code:'',
   options:[
@@ -642,10 +861,39 @@ Console.WriteLine(a1.X);`,
   answerIndex:1,
   hint:'Encapsulation.'
 },
-
-// ====== LEVEL 5 (Collections & Exceptions) ======
 {
-  id:'q30', level:5, type:'output',
+  id:'q60', level:2, type:'multiple',
+  prompt:'Which line calls a method named Print?',
+  code:'',
+  options:['Print();','void Print()','class Print','Print = true;'],
+  answerIndex:0,
+  hint:'Calling a method uses parentheses.'
+},
+{
+  id:'q61', level:2, type:'output',
+  prompt:'What prints?',
+  code:`class Box {
+  public int Size { get; set; }
+}
+var b = new Box();
+b.Size = 3;
+Console.WriteLine(b.Size);`,
+  options:['0','3','Size','Error'],
+  answerIndex:1,
+  hint:'Auto-property stores the assigned value.'
+},
+{
+  id:'q62', level:2, type:'multiple',
+  prompt:'Which is an auto-implemented property?',
+  code:'',
+  options:['public int Age { get; set; }','public int Age;','int Age() { return 0; }','public int Age { get { return age; } }'],
+  answerIndex:0,
+  hint:'Auto-properties have get and set with no body.'
+},
+
+// ====== CHAPTER 7 (Arrays & Lists) ======
+{
+  id:'q30', level:7, type:'output',
   prompt:'What prints?',
   code:`var list = new List<int>{1,2,3};
 list.Add(4);
@@ -655,7 +903,7 @@ Console.WriteLine(list.Count);`,
   hint:'Count increases after Add.'
 },
 {
-  id:'q31', level:5, type:'bug',
+  id:'q31', level:7, type:'bug',
   prompt:'What causes the exception?',
   code:`List<int> nums = null;
 nums.Add(3);`,
@@ -669,7 +917,7 @@ nums.Add(3);`,
   hint:'Calling a method on null.'
 },
 {
-  id:'q32', level:5, type:'multiple',
+  id:'q32', level:7, type:'multiple',
   prompt:'Which collection enforces unique values?',
   code:'',
   options:['List','Array','Dictionary','HashSet'],
@@ -677,20 +925,7 @@ nums.Add(3);`,
   hint:'No duplicates allowed.'
 },
 {
-  id:'q33', level:5, type:'output',
-  prompt:'What prints?',
-  code:`try{
-  int x = int.Parse("abc");
-}catch{
-  Console.Write("X");
-}
-Console.Write("Y");`,
-  options:['X','Y','XY','Error'],
-  answerIndex:2,
-  hint:'Exception triggers catch.'
-},
-{
-  id:'q34', level:5, type:'multiple',
+  id:'q34', level:7, type:'multiple',
   prompt:'What does LINQ stand for?',
   code:'',
   options:[
@@ -703,9 +938,9 @@ Console.Write("Y");`,
   hint:'Built into the language.'
 },
 
-// ====== LEVEL 6 (Advanced Reasoning) ======
+// ====== CHAPTER 3 (Decision Structures) ======
 {
-  id:'q35', level:6, type:'output',
+  id:'q35', level:3, type:'output',
   prompt:'What prints?',
   code:`int x = 1;
 if(x++ > 1)
@@ -717,7 +952,7 @@ else
   hint:'Post-increment happens after comparison.'
 },
 {
-  id:'q36', level:6, type:'output',
+  id:'q36', level:3, type:'output',
   prompt:'What prints?',
   code:`bool a = true;
 bool b = false;
@@ -727,7 +962,7 @@ Console.WriteLine(a || b && false);`,
   hint:'&& has higher precedence than ||.'
 },
 {
-  id:'q37', level:6, type:'bug',
+  id:'q37', level:3, type:'bug',
   prompt:'What is logically wrong?',
   code:`if(x = 5){
   Console.WriteLine("Hi");
@@ -741,8 +976,33 @@ Console.WriteLine(a || b && false);`,
   answerIndex:0,
   hint:'Use == for comparison.'
 },
+
+// ====== CHAPTER 8 (Inheritance & Polymorphism) ======
 {
-  id:'q38', level:6, type:'multiple',
+  id:'q58', level:8, type:'multiple',
+  prompt:'Which symbol is used to inherit from a base class?',
+  code:'',
+  options:[':','->','extends','implements'],
+  answerIndex:0,
+  hint:'C# uses a colon for inheritance.'
+},
+{
+  id:'q59', level:8, type:'output',
+  prompt:'What prints?',
+  code:`class Animal {
+  public virtual string Speak(){ return "Animal"; }
+}
+class Dog : Animal {
+  public override string Speak(){ return "Dog"; }
+}
+Animal a = new Dog();
+Console.WriteLine(a.Speak());`,
+  options:['Animal','Dog','Error','Depends on Animal'],
+  answerIndex:1,
+  hint:'Virtual/override enables polymorphism.'
+},
+{
+  id:'q38', level:8, type:'multiple',
   prompt:'Which best describes polymorphism?',
   code:'',
   options:[
@@ -754,8 +1014,10 @@ Console.WriteLine(a || b && false);`,
   answerIndex:1,
   hint:'Same interface, different behavior.'
 },
+
+// ====== CHAPTER 7 (Arrays & Lists) ======
 {
-  id:'q39', level:6, type:'output',
+  id:'q39', level:7, type:'output',
   prompt:'What prints?',
   code:`int[] a = {1,2,3};
 Console.WriteLine(a.Length > 3 ? "Yes" : "No");`,
@@ -934,7 +1196,9 @@ qs('#nextBtn').addEventListener('click', ()=>{
   if(confirm('Skip question? This costs 5 XP.')) skipQuestion();
 });
 qs('#exportBtn').addEventListener('click', ()=>{
-  const data = JSON.stringify(progress, null, 2);
+  const dataObj = Object.assign({}, progress);
+  delete dataObj.name;
+  const data = JSON.stringify(dataObj, null, 2);
   const blob = new Blob([data], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -946,17 +1210,6 @@ qs('#exportBtn').addEventListener('click', ()=>{
 
 // on load
 refreshUI();
-
-/* ----- Initialization: ask for player name once (non-blocking) ----- */
-setTimeout(()=>{
-  const n = prompt('Enter player name (this saves locally) — leave blank to stay Guest:', progress.name);
-  if(n !== null && n.trim() !== ''){
-    progress.name = n.trim();
-    saveProgress();
-  } else {
-    refreshUI();
-  }
-}, 700);
 
 /* Accessibility: keyboard answer with 1..5 */
 document.addEventListener('keydown', (ev)=>{
