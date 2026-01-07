@@ -151,6 +151,7 @@ const CLOUDS = Array.from({length:8}, (_, i)=>({
 const GAME = {
   running: false,
   over: false,
+  win: false,
   lives: 3,
   speed: 1.4,
   streak: 0,
@@ -347,6 +348,34 @@ const QUESTIONS = [
     q: 'Which keyword prevents creating instances?',
     options: ['abstract', 'public'],
     answer: 0
+  },
+  {
+    id: 'c8_q7',
+    level: 8,
+    q: 'Which method name is called for cleanup?',
+    options: ['Dispose', 'Finalize'],
+    answer: 0
+  },
+  {
+    id: 'c8_q8',
+    level: 8,
+    q: 'Which keyword hides a base member?',
+    options: ['new', 'override'],
+    answer: 0
+  },
+  {
+    id: 'c8_q9',
+    level: 8,
+    q: 'Which access level allows derived classes only?',
+    options: ['protected', 'private'],
+    answer: 0
+  },
+  {
+    id: 'c8_q10',
+    level: 8,
+    q: 'Which lets a class define required methods for children?',
+    options: ['abstract', 'static'],
+    answer: 0
   }
 ];
 
@@ -427,6 +456,10 @@ function resetWall(){
   GAME.hitCorrect = false;
   GAME.activeQuestion = nextQuestion();
   if(!GAME.activeQuestion){
+    if(GAME.level === 8){
+      winGame();
+      return;
+    }
     GAME.activeQuestion = { text:'No questions available.', options:['OK','OK'], answer:0 };
   }
   const shuffled = shuffleArray(GAME.activeQuestion.options.map((opt, idx)=>({opt, idx})));
@@ -440,6 +473,7 @@ function resetWall(){
 function startGame(){
   GAME.running = true;
   GAME.over = false;
+  GAME.win = false;
   GAME.chapterComplete = false;
   GAME.lives = 3;
   GAME.speed = 1.4;
@@ -716,7 +750,17 @@ function handleHit(msg){
 function endGame(){
   GAME.running = false;
   GAME.over = true;
+  GAME.win = false;
   uiQuestion.textContent = 'Game over. Press Space to restart.';
+}
+
+function winGame(){
+  GAME.running = false;
+  GAME.over = true;
+  GAME.win = true;
+  uiQuestion.textContent = 'You win! All chapter 8 questions completed.';
+  uiFeedback.textContent = 'Nice work — press Space to replay.';
+  uiFeedback.className = 'feedback good';
 }
 
 function update(){
@@ -818,7 +862,8 @@ function draw(){
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 28px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(GAME.over ? 'Game Over' : 'Press Space to Start', canvas.width / 2, canvas.height / 2 - 10);
+    const title = GAME.over ? (GAME.win ? 'You Win!' : 'Game Over') : 'Press Space to Start';
+    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 10);
     ctx.font = '16px "Trebuchet MS", sans-serif';
     ctx.fillStyle = '#cbd5e1';
     ctx.fillText('Space bar only. Fly through the correct capsule.', canvas.width / 2, canvas.height / 2 + 20);
