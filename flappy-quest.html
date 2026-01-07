@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flappy Code</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#121a26;
+    --accent:#f59e0b;
+    --accent-2:#fbbf24;
+    --text:#f8fafc;
+    --muted:#cbd5e1;
+    --danger:#f87171;
+    --good:#22c55e;
+  }
+  *{box-sizing:border-box;font-family:"Trebuchet MS","Segoe UI",Tahoma,sans-serif;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:radial-gradient(circle at 20% 0%, #172033 0%, #0b0f14 55%, #090d12 100%);
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+  }
+  .frame{
+    width:980px;
+    max-width:95vw;
+    background:linear-gradient(180deg,#101826,#0c121b);
+    border:1px solid #24344d;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 20px 50px rgba(2,6,23,0.5);
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .title{
+    font-weight:800;
+    color:var(--accent);
+    letter-spacing:0.4px;
+  }
+  .hud{
+    display:flex;
+    gap:14px;
+    font-size:14px;
+    color:var(--muted);
+  }
+  .pill{
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid #2a3a54;
+    background:#0f1725;
+  }
+  canvas{
+    width:100%;
+    height:auto;
+    border-radius:12px;
+    border:1px solid #22324a;
+    display:block;
+    background:linear-gradient(180deg,#0e1522 0%, #0b111b 100%);
+  }
+  .questionBar{
+    margin-top:12px;
+    padding:12px 14px;
+    background:var(--panel);
+    border:1px solid #24344d;
+    border-radius:10px;
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    justify-content:space-between;
+  }
+  .questionText{
+    font-size:15px;
+    line-height:1.4;
+  }
+  .legend{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .feedback{
+    font-weight:700;
+  }
+  .feedback.good{color:var(--good);}
+  .feedback.bad{color:var(--danger);}
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="title">Flappy Code</div>
+      <div class="hud">
+        <div class="pill">Lives: <span id="lives">3</span></div>
+        <div class="pill">Speed: <span id="speed">2.0</span></div>
+        <div class="pill">Streak: <span id="streak">0</span></div>
+      </div>
+    </div>
+    <canvas id="game" width="900" height="540" aria-label="Flappy quiz game"></canvas>
+    <div class="questionBar">
+      <div>
+        <div class="questionText" id="questionText">Press Space to start. Fly through the correct answer capsule.</div>
+        <div class="legend">Space bar only: flap to choose a gap.</div>
+      </div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const uiLives = document.getElementById('lives');
+const uiSpeed = document.getElementById('speed');
+const uiStreak = document.getElementById('streak');
+const uiQuestion = document.getElementById('questionText');
+const uiFeedback = document.getElementById('feedback');
+
+const GAME = {
+  running: false,
+  over: false,
+  lives: 3,
+  speed: 1.4,
+  streak: 0,
+  gravity: 0.07,
+  flap: -4.4,
+  wallGapHeight: 160,
+  wallWidth: 80,
+  wallX: 0,
+  answered: false,
+  hitGapIndex: null,
+  hitCorrect: false,
+  activeQuestion: null,
+  correctGapIndex: 0,
+  lastResult: '',
+  lastResultType: ''
+};
+
+const bird = {
+  x: 150,
+  y: canvas.height / 2,
+  r: 16,
+  vy: 0
+};
+
+const GAP_CENTERS = [160, 380];
+
+const QUESTIONS = [
+  {
+    q: 'Which line reads input from the user?',
+    options: ['Console.ReadLine()', 'Console.WriteLine()'],
+    answer: 0
+  },
+  {
+    q: 'Which prints without adding a new line?',
+    options: ['Console.Write()', 'Console.WriteLine()'],
+    answer: 0
+  },
+  {
+    q: 'What is the result of int x = 5 / 2; ?',
+    options: ['2', '2.5'],
+    answer: 0
+  },
+  {
+    q: 'Which is an auto-implemented property?',
+    options: ['public int Age { get; set; }', 'public int Age;'],
+    answer: 0
+  },
+  {
+    q: 'Which line calls a method named Print?',
+    options: ['Print();', 'void Print()'],
+    answer: 0
+  },
+  {
+    q: 'Which uses string interpolation?',
+    options: ['Console.WriteLine($"Hi {name}")', 'Console.WriteLine("Hi {name}")'],
+    answer: 0
+  },
+  {
+    q: 'Which loop is best when iterations are unknown?',
+    options: ['while', 'for'],
+    answer: 0
+  },
+  {
+    q: 'Which line gets a random number 1 to 3?',
+    options: ['r.Next(1,4)', 'r.Next(1,3)'],
+    answer: 0
+  }
+];
+
+let questionIndex = 0;
+
+function shuffleArray(arr){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function nextQuestion(){
+  const q = QUESTIONS[questionIndex % QUESTIONS.length];
+  questionIndex++;
+  return {
+    text: q.q,
+    options: q.options.slice(),
+    answer: q.answer
+  };
+}
+
+function resetBird(){
+  bird.y = canvas.height / 2;
+  bird.vy = 0;
+}
+
+function resetWall(){
+  GAME.wallX = canvas.width + 120;
+  GAME.answered = false;
+  GAME.hitGapIndex = null;
+  GAME.hitCorrect = false;
+  GAME.activeQuestion = nextQuestion();
+  const shuffled = shuffleArray(GAME.activeQuestion.options.map((opt, idx)=>({opt, idx})));
+  GAME.activeQuestion.options = shuffled.map(item=>item.opt);
+  GAME.correctGapIndex = shuffled.findIndex(item=>item.idx === GAME.activeQuestion.answer);
+  uiQuestion.textContent = GAME.activeQuestion.text;
+}
+
+function startGame(){
+  GAME.running = true;
+  GAME.over = false;
+  GAME.lives = 3;
+  GAME.speed = 1.4;
+  GAME.streak = 0;
+  uiFeedback.textContent = '';
+  resetBird();
+  resetWall();
+  updateHud();
+}
+
+function updateHud(){
+  uiLives.textContent = GAME.lives;
+  uiSpeed.textContent = GAME.speed.toFixed(1);
+  uiStreak.textContent = GAME.streak;
+}
+
+function drawCapsule(x, y, w, h, text, state){
+  const radius = h / 2;
+  ctx.save();
+  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+  if(state === 'good'){
+    grad.addColorStop(0, '#1f8b4c');
+    grad.addColorStop(1, '#36c06f');
+  }else if(state === 'bad'){
+    grad.addColorStop(0, '#b91c1c');
+    grad.addColorStop(1, '#ef4444');
+  }else{
+    grad.addColorStop(0, '#334155');
+    grad.addColorStop(1, '#0f172a');
+  }
+  ctx.fillStyle = grad;
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.arcTo(x + w, y, x + w, y + radius, radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+  ctx.lineTo(x + radius, y + h);
+  ctx.arcTo(x, y + h, x, y + h - radius, radius);
+  ctx.lineTo(x, y + radius);
+  ctx.arcTo(x, y, x + radius, y, radius);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, y + h / 2);
+  ctx.restore();
+}
+
+function drawWall(){
+  const gapH = GAME.wallGapHeight;
+  const x = GAME.wallX;
+  const w = GAME.wallWidth;
+  const gaps = GAP_CENTERS.map(center => ({
+    top: center - gapH / 2,
+    bottom: center + gapH / 2
+  })).sort((a,b)=>a.top-b.top);
+  const wallSegments = [];
+  if(gaps.length){
+    wallSegments.push({ y: 0, h: gaps[0].top });
+    for(let i=0;i<gaps.length-1;i++){
+      wallSegments.push({ y: gaps[i].bottom, h: gaps[i+1].top - gaps[i].bottom });
+    }
+    wallSegments.push({ y: gaps[gaps.length-1].bottom, h: canvas.height - gaps[gaps.length-1].bottom });
+  }
+
+  ctx.save();
+  ctx.fillStyle = '#1b2638';
+  ctx.strokeStyle = '#2b3a52';
+  wallSegments.forEach(seg=>{
+    if(seg.h <= 0) return;
+    ctx.fillRect(x, seg.y, w, seg.h);
+    ctx.strokeRect(x, seg.y, w, seg.h);
+  });
+  ctx.restore();
+
+  const capsuleH = 34;
+  ctx.save();
+  ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+  GAME.activeQuestion.options.forEach((opt, idx)=>{
+    const padding = 26;
+    const textW = ctx.measureText(opt).width;
+    const capsuleW = Math.max(110, Math.ceil(textW + padding));
+    const cy = GAP_CENTERS[idx];
+    const cx = x + w / 2 - capsuleW / 2;
+    let state = null;
+    if(GAME.answered && GAME.hitGapIndex === idx){
+      state = GAME.hitCorrect ? 'good' : 'bad';
+    }
+    drawCapsule(cx, cy - capsuleH / 2, capsuleW, capsuleH, opt, state);
+  });
+  ctx.restore();
+}
+
+function drawBird(){
+  ctx.save();
+  ctx.fillStyle = '#fbbf24';
+  ctx.strokeStyle = '#1f2937';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#1f2937';
+  ctx.beginPath();
+  ctx.arc(bird.x + 6, bird.y - 4, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function checkCollision(){
+  const x = GAME.wallX;
+  const w = GAME.wallWidth;
+  if(bird.x + bird.r < x || bird.x - bird.r > x + w) return;
+
+  const inGap = GAP_CENTERS.some(center=>{
+    const top = center - GAME.wallGapHeight / 2;
+    const bottom = center + GAME.wallGapHeight / 2;
+    return bird.y > top && bird.y < bottom;
+  });
+
+  if(!inGap){
+    handleHit('Hit the wall!');
+    return;
+  }
+
+  if(GAME.answered) return;
+
+  const capsuleW = 140;
+  const capsuleH = 34;
+  GAP_CENTERS.forEach((center, idx)=>{
+    const cx = x + w / 2 - capsuleW / 2;
+    const cy = center - capsuleH / 2;
+    const hit = bird.x + bird.r > cx &&
+      bird.x - bird.r < cx + capsuleW &&
+      bird.y + bird.r > cy &&
+      bird.y - bird.r < cy + capsuleH;
+    if(hit){
+      if(idx === GAME.correctGapIndex){
+        handleCorrect(idx);
+      }else{
+        handleWrong(idx);
+      }
+    }
+  });
+}
+
+function handleCorrect(gapIndex){
+  if(GAME.answered) return;
+  GAME.answered = true;
+  GAME.hitGapIndex = gapIndex;
+  GAME.hitCorrect = true;
+  GAME.speed += 0.1;
+  GAME.streak += 1;
+  GAME.lastResult = 'Correct! Speed up.';
+  GAME.lastResultType = 'good';
+  uiFeedback.textContent = GAME.lastResult;
+  uiFeedback.className = 'feedback good';
+  updateHud();
+}
+
+function handleWrong(gapIndex){
+  if(GAME.answered) return;
+  GAME.answered = true;
+  GAME.hitGapIndex = gapIndex;
+  GAME.hitCorrect = false;
+  GAME.lives -= 1;
+  GAME.streak = 0;
+  GAME.lastResult = 'Wrong answer. -1 life.';
+  GAME.lastResultType = 'bad';
+  uiFeedback.textContent = GAME.lastResult;
+  uiFeedback.className = 'feedback bad';
+  updateHud();
+  if(GAME.lives <= 0){
+    endGame();
+  }
+}
+
+function handleMissed(){
+  if(GAME.answered) return;
+  GAME.answered = true;
+  GAME.lives -= 1;
+  GAME.streak = 0;
+  GAME.lastResult = 'Missed a capsule. -1 life.';
+  GAME.lastResultType = 'bad';
+  uiFeedback.textContent = GAME.lastResult;
+  uiFeedback.className = 'feedback bad';
+  updateHud();
+  if(GAME.lives <= 0){
+    endGame();
+  }
+}
+
+function handleHit(msg){
+  GAME.lives -= 1;
+  GAME.streak = 0;
+  GAME.lastResult = msg + ' -1 life.';
+  GAME.lastResultType = 'bad';
+  uiFeedback.textContent = GAME.lastResult;
+  uiFeedback.className = 'feedback bad';
+  updateHud();
+  if(GAME.lives <= 0){
+    endGame();
+    return;
+  }
+  resetBird();
+  resetWall();
+}
+
+function endGame(){
+  GAME.running = false;
+  GAME.over = true;
+  uiQuestion.textContent = 'Game over. Press Space to restart.';
+}
+
+function update(){
+  if(!GAME.running) return;
+  bird.vy += GAME.gravity;
+  bird.y += bird.vy;
+
+  if(bird.y - bird.r < 0){
+    bird.y = bird.r;
+    bird.vy = 0;
+  }
+  if(bird.y + bird.r > canvas.height){
+    handleHit('Hit the ground!');
+  }
+
+  GAME.wallX -= GAME.speed;
+  if(GAME.wallX + GAME.wallWidth < bird.x && !GAME.answered){
+    handleMissed();
+  }
+
+  if(GAME.wallX + GAME.wallWidth < -20){
+    resetWall();
+  }
+
+  checkCollision();
+}
+
+function draw(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.fillStyle = '#0b1320';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  drawWall();
+  drawBird();
+
+  if(!GAME.running){
+    ctx.save();
+    ctx.fillStyle = 'rgba(2,6,23,0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 28px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(GAME.over ? 'Game Over' : 'Press Space to Start', canvas.width / 2, canvas.height / 2 - 10);
+    ctx.font = '16px "Trebuchet MS", sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('Space bar only. Fly through the correct capsule.', canvas.width / 2, canvas.height / 2 + 20);
+    ctx.restore();
+  }
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+document.addEventListener('keydown', (ev)=>{
+  if(ev.code !== 'Space') return;
+  ev.preventDefault();
+  if(!GAME.running){
+    startGame();
+  }
+  bird.vy = GAME.flap;
+});
+
+resetWall();
+updateHud();
+loop();
+</script>
+</body>
+</html>

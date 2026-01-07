@@ -60,6 +60,9 @@ h1{font-size:22px;margin:0 0 8px;color:var(--accent)}
 
 .startBtn:focus,.secondaryBtn:focus,.optionBtn:focus{outline:2px solid var(--accent-2);outline-offset:2px}
 .secondaryBtn:disabled{opacity:0.6;cursor:not-allowed}
+.questionActions{display:flex;justify-content:flex-end;margin-top:12px}
+.nextQuestionBtn{background:var(--surface-2);border:1px solid var(--border);padding:8px 12px;border-radius:8px;color:var(--text);cursor:pointer}
+.nextQuestionBtn:disabled{opacity:0.6;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -120,6 +123,9 @@ h1{font-size:22px;margin:0 0 8px;color:var(--accent)}
       <div id="codeArea" class="codeBox" aria-live="polite">Welcome! Click <strong>Start Round</strong> to play.</div>
       <div id="options" class="options" role="list"></div>
       <div id="hint" class="hint"></div>
+      <div class="questionActions">
+        <button class="nextQuestionBtn" id="nextQuestionBtn" disabled>Next Question</button>
+      </div>
     </div>
 
     <div class="footer"></div>
@@ -1045,6 +1051,7 @@ function chooseQuestionByLevel(playerLevel){
 // ---------- Round logic ----------
 let currentRound = null;
 const ROUND_SIZE = 5;
+let awaitingNext = false;
 
 function newRound(){
   currentRound = {
@@ -1061,6 +1068,7 @@ function newRound(){
   qs('#roundInfo').textContent = `Round: In progress`;
   qs('#difficultyHint').textContent = `Difficulty: Level ${progress.level} (content up to ${progress.level+1})`;
   qs('#nextBtn').disabled = false;
+  qs('#nextQuestionBtn').disabled = true;
   startQuestion(0);
   startTimer();
 }
@@ -1081,6 +1089,7 @@ function endRound(){
   evaluateBadges();
   // disable skip
   qs('#nextBtn').disabled = true;
+  qs('#nextQuestionBtn').disabled = true;
   stopTimer();
   saveProgress();
   showRoundSummary(totalXP);
@@ -1099,6 +1108,7 @@ function startQuestion(idx){
   }
   currentRound.index = idx;
   const q = currentRound.questions[idx];
+  awaitingNext = false;
   qs('#questionNumber').textContent = `Question ${idx+1} / ${currentRound.questions.length}`;
   qs('#codeArea').innerHTML = `<strong>${escapeHtml(q.prompt)}</strong>\n\n<pre>${escapeHtml(q.code)}</pre>`;
   // create options (shuffle)
@@ -1113,6 +1123,7 @@ function startQuestion(idx){
     container.appendChild(btn);
   });
   qs('#hint').textContent = q.hint || '';
+  qs('#nextQuestionBtn').disabled = true;
 }
 
 // handle answer
@@ -1148,10 +1159,8 @@ function handleAnswer(q, selectedIndex, btnElement){
   currentRound.totalTime += timeTaken;
   saveProgress();
 
-  // move to next question after short delay
-  setTimeout(()=>{
-    startQuestion(currentRound.index + 1);
-  }, 900);
+  awaitingNext = true;
+  qs('#nextQuestionBtn').disabled = false;
 }
 
 // skip question
@@ -1194,6 +1203,10 @@ qs('#startBtn').addEventListener('click', ()=>{
 });
 qs('#nextBtn').addEventListener('click', ()=>{
   if(confirm('Skip question? This costs 5 XP.')) skipQuestion();
+});
+qs('#nextQuestionBtn').addEventListener('click', ()=>{
+  if(!currentRound || !awaitingNext) return;
+  startQuestion(currentRound.index + 1);
 });
 qs('#exportBtn').addEventListener('click', ()=>{
   const dataObj = Object.assign({}, progress);
