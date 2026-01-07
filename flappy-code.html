@@ -402,6 +402,7 @@ function nextQuestion(){
   const unseen = pool.filter(q => !GAME.seenSet.has(q.id));
   const missed = pool.filter(q => GAME.missedSet.has(q.id));
   const pickFrom = unseen.length ? unseen : (missed.length ? missed : pool);
+  if(unseen.length === 0 && missed.length === 0) return null;
   if(pickFrom.length === 0) return null;
   const q = pickFrom[Math.floor(Math.random() * pickFrom.length)];
   if(!q) return null;
@@ -628,14 +629,20 @@ function handleCorrect(gapIndex){
   GAME.streak += 1;
   if(GAME.activeQuestion && GAME.activeQuestion.id){
     GAME.correctSet.add(GAME.activeQuestion.id);
+    GAME.missedSet.delete(GAME.activeQuestion.id);
     const totalForLevel = QUESTIONS.filter(q => q.level === GAME.level).length;
     if(GAME.correctSet.size >= totalForLevel && GAME.level < 8){
       GAME.unlockedLevel = Math.max(GAME.unlockedLevel, GAME.level + 1);
+      GAME.selectedLevel = Math.min(8, GAME.level + 1);
+      GAME.level = GAME.selectedLevel;
+      GAME.correctSet = new Set();
+      GAME.seenSet = new Set();
+      GAME.missedSet = new Set();
       updateChapterSelect();
       saveProgress();
-      uiFeedback.textContent = 'Chapter unlocked! Pick a chapter to continue.';
+      uiFeedback.textContent = `Chapter unlocked! Press Space to start Chapter ${GAME.level}.`;
       uiFeedback.className = 'feedback good';
-      uiQuestion.textContent = 'Chapter complete. Select a chapter, then press Space.';
+      uiQuestion.textContent = 'Chapter complete. Press Space to continue.';
       GAME.running = false;
       GAME.chapterComplete = true;
     }
