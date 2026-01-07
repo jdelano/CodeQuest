@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blockout C# — Keyword Breaker</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111a26;
+    --accent:#f59e0b;
+    --accent-2:#fbbf24;
+    --text:#f8fafc;
+    --muted:#cbd5e1;
+    --good:#22c55e;
+    --bad:#f87171;
+  }
+  *{box-sizing:border-box;font-family:"Trebuchet MS","Segoe UI",Tahoma,sans-serif;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:radial-gradient(circle at 20% 0%, #172033 0%, #0b0f14 55%, #090d12 100%);
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+  }
+  .frame{
+    width:980px;
+    max-width:96vw;
+    background:linear-gradient(180deg,#101826,#0c121b);
+    border:1px solid #24344d;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 20px 50px rgba(2,6,23,0.5);
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .title{
+    font-weight:800;
+    color:var(--accent);
+    letter-spacing:0.4px;
+  }
+  .hud{
+    display:flex;
+    gap:12px;
+    font-size:14px;
+    color:var(--muted);
+  }
+  .pill{
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid #2a3a54;
+    background:#0f1725;
+  }
+  .compileBar{
+    width:110px;
+    height:10px;
+    background:#0b111b;
+    border:1px solid #2a3a54;
+    border-radius:999px;
+    overflow:hidden;
+    display:inline-block;
+    margin-left:6px;
+    vertical-align:middle;
+  }
+  .compileFill{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg,#22c55e,#86efac);
+    display:block;
+  }
+  canvas{
+    width:100%;
+    height:auto;
+    border-radius:12px;
+    border:1px solid #22324a;
+    display:block;
+    background:linear-gradient(180deg,#0e1522 0%, #0b111b 100%);
+  }
+  .questionBar{
+    margin-top:12px;
+    padding:12px 14px;
+    background:var(--panel);
+    border:1px solid #24344d;
+    border-radius:10px;
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    justify-content:space-between;
+  }
+  .questionText{
+    font-size:15px;
+    line-height:1.4;
+  }
+  .questionText code{
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    font-size:14px;
+    background:rgba(15,23,42,0.12);
+    padding:2px 6px;
+    border-radius:6px;
+  }
+  .legend{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .feedback{
+    font-weight:700;
+  }
+  .feedback.good{color:var(--good);}
+  .feedback.bad{color:var(--bad);}
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="title">Blockout C# — Keyword Breaker</div>
+      <div class="hud">
+        <div class="pill">Level: <span id="level">1</span></div>
+        <div class="pill">Lives: <span id="lives">3</span></div>
+        <div class="pill">Score: <span id="score">0</span></div>
+        <div class="pill">Speed: <span id="speed">1.0</span></div>
+        <div class="pill">Compile:
+          <span id="compile">0%</span>
+          <span class="compileBar"><span id="compileFill" class="compileFill"></span></span>
+        </div>
+        <div class="pill">Power: <span id="power">None</span></div>
+      </div>
+    </div>
+    <canvas id="game" width="900" height="540" aria-label="Blockout keyword game"></canvas>
+    <div class="questionBar">
+      <div>
+        <div class="questionText" id="questionText">Press Space to start. Break only valid C# keywords or operators.</div>
+        <div class="legend">Move: mouse or ← → keys. Space to launch.</div>
+      </div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const uiLives = document.getElementById('lives');
+const uiScore = document.getElementById('score');
+const uiSpeed = document.getElementById('speed');
+const uiLevel = document.getElementById('level');
+const uiCompile = document.getElementById('compile');
+const uiCompileFill = document.getElementById('compileFill');
+const uiPower = document.getElementById('power');
+const uiQuestion = document.getElementById('questionText');
+const uiFeedback = document.getElementById('feedback');
+
+const KEYWORDS = [
+  'new','class','return','const','if','void','catch','foreach','enum',':',
+  'static','public','private','protected','virtual','override','switch','case',
+  'break','continue','using','try','finally','throw','readonly','abstract','sealed',
+  'ReadLine','WriteLine','for','while','+=','-=','+','-','*','/','==','>','<','='
+];
+
+const VALID_LEVELS = [
+  ['int','string','bool','double','var','new','class','return','void','if','for','while','switch'],
+  ['public','private','protected','static','const','readonly','enum','struct','break','continue'],
+  ['try','catch','finally','throw','foreach','virtual','override','abstract','sealed','using'],
+  ['+=','-=','+','-','*','/','==','>','<','='],
+  ['ReadLine','WriteLine','Console','List','Dictionary','HashSet','namespace','interface']
+].map(level=>level.filter(Boolean));
+
+const INVALID_TOKENS = [
+  'printf','println','main','include','System.out','integer','varr','boool',
+  'foreachs','pubic','privte','elseif','elsif','yielding','function'
+];
+
+const GAME = {
+  running: false,
+  launched: false,
+  lives: 3,
+  score: 0,
+  speed: 1.0,
+  level: 1,
+  blocks: [],
+  compile: 0,
+  validSet: new Set(),
+  targetsRemaining: 0,
+  targetCount: 0,
+  boardsCleared: 0,
+  boardsPerLevel: 3,
+  balls: [],
+  powerups: [],
+  stickyCharges: 0,
+  activePower: 'None',
+  slowMoTimer: 0,
+  longPaddleTimer: 0,
+  pierceTimer: 0
+};
+
+const paddle = {
+  baseW: 130,
+  w: 130,
+  h: 14,
+  x: canvas.width / 2 - 65,
+  y: canvas.height - 30,
+  dx: 0
+};
+
+const BALL_RADIUS = 8;
+
+function formatQuestion(text){
+  return String(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function updateHud(){
+  uiLives.textContent = GAME.lives;
+  uiScore.textContent = GAME.score;
+  uiSpeed.textContent = GAME.speed.toFixed(1);
+  uiLevel.textContent = GAME.level;
+  const pct = Math.min(100, GAME.compile);
+  uiCompile.textContent = `${pct}%`;
+  uiCompileFill.style.width = `${pct}%`;
+  uiPower.textContent = GAME.activePower;
+}
+
+function createBall(x, y, vx, vy){
+  return { r: BALL_RADIUS, x, y, vx, vy, stuck: false };
+}
+
+function resetBall(){
+  const x = paddle.x + paddle.w / 2;
+  const y = paddle.y - BALL_RADIUS - 2;
+  const base = 2.6 + Math.random() * 1.2;
+  const vx = (Math.random() < 0.5 ? -1 : 1) * base * GAME.speed;
+  const vy = -(base + 0.6) * GAME.speed;
+  GAME.balls = [createBall(x, y, vx, vy)];
+  GAME.balls[0].stuck = true;
+  GAME.launched = false;
+}
+
+function buildBlocks(){
+  const cols = 5;
+  const rows = 3;
+  const gap = 12;
+  const blockW = (canvas.width - gap * (cols + 1)) / cols;
+  const blockH = 42;
+  const startY = 70;
+  const totalBlocks = cols * rows;
+  const keywordList = Array.from({length: totalBlocks}, ()=>KEYWORDS[Math.floor(Math.random() * KEYWORDS.length)]);
+  const targetCount = Math.max(4, Math.min(7, Math.floor(totalBlocks * 0.45)));
+  GAME.targetCount = targetCount;
+  const levelTokens = VALID_LEVELS[(GAME.level - 1) % VALID_LEVELS.length];
+  GAME.validSet = new Set(levelTokens);
+  const targetSlots = shuffleArray(Array.from({length: totalBlocks}, (_, i)=>i)).slice(0, targetCount);
+  targetSlots.forEach((idx, i)=>{
+    keywordList[idx] = levelTokens[i % levelTokens.length];
+  });
+  const nonTargetSlots = Array.from({length: totalBlocks}, (_, i)=>i).filter(i=>!targetSlots.includes(i));
+  const invalidCount = Math.max(3, Math.floor(nonTargetSlots.length * 0.35));
+  shuffleArray(nonTargetSlots);
+  for(let i = 0; i < invalidCount; i++){
+    const slot = nonTargetSlots[i];
+    const token = INVALID_TOKENS[i % INVALID_TOKENS.length];
+    keywordList[slot] = token;
+  }
+  const shuffled = shuffleArray(keywordList);
+  const powerTypes = ['shotgun','fireball','sticky','slowmo','longpaddle','piercing'];
+  const powerCandidates = [];
+  for(let i = 0; i < totalBlocks; i++){
+    const row = Math.floor(i / cols);
+    if(row >= 1) powerCandidates.push(i);
+  }
+  const powerSlots = shuffleArray(powerCandidates).slice(0, 3);
+  GAME.blocks = [];
+  GAME.targetsRemaining = 0;
+  let idx = 0;
+  for(let r = 0; r < rows; r++){
+    for(let c = 0; c < cols; c++){
+      const x = gap + c * (blockW + gap);
+      const y = startY + r * (blockH + gap);
+      const label = shuffled[idx];
+      const isValid = GAME.validSet.has(label);
+      if(isValid) GAME.targetsRemaining += 1;
+      const powerup = powerSlots.includes(idx) ? powerTypes[idx % powerTypes.length] : null;
+      GAME.blocks.push({
+        x, y, w: blockW, h: blockH,
+        label,
+        alive: true,
+        valid: isValid,
+        powerup
+      });
+      idx++;
+    }
+  }
+}
+
+function shuffleArray(arr){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function startRound(){
+  buildBlocks();
+  resetBall();
+  uiQuestion.textContent = `Break valid tokens only. Remaining: ${GAME.targetsRemaining}. Board ${GAME.boardsCleared + 1}/${GAME.boardsPerLevel}.`;
+  uiFeedback.textContent = '';
+}
+
+function startGame(){
+  GAME.running = true;
+  GAME.lives = 3;
+  GAME.score = 0;
+  GAME.speed = 1.0;
+  GAME.level = 1;
+  GAME.compile = 0;
+  GAME.boardsCleared = 0;
+  GAME.powerups = [];
+  GAME.stickyCharges = 0;
+  GAME.activePower = 'None';
+  GAME.slowMoTimer = 0;
+  GAME.longPaddleTimer = 0;
+  GAME.pierceTimer = 0;
+  paddle.w = paddle.baseW;
+  startRound();
+  updateHud();
+}
+
+function nextRound(){
+  GAME.level += 1;
+  GAME.speed += 0.12;
+  GAME.compile = 0;
+  GAME.boardsCleared = 0;
+  GAME.powerups = [];
+  GAME.stickyCharges = 0;
+  GAME.activePower = 'None';
+  GAME.slowMoTimer = 0;
+  GAME.longPaddleTimer = 0;
+  GAME.pierceTimer = 0;
+  paddle.w = paddle.baseW;
+  startRound();
+  updateHud();
+}
+
+function endGame(msg){
+  GAME.running = false;
+  uiFeedback.textContent = msg;
+  uiFeedback.className = 'feedback bad';
+}
+
+function handleCorrectHit(){
+  GAME.score += 1;
+  GAME.targetsRemaining = Math.max(0, GAME.targetsRemaining - 1);
+  const step = Math.max(1, Math.round(100 / Math.max(1, GAME.targetCount * GAME.boardsPerLevel)));
+  GAME.compile = Math.min(100, GAME.compile + step);
+  uiFeedback.textContent = 'Correct keyword!';
+  uiFeedback.className = 'feedback good';
+  if(GAME.targetsRemaining <= 0){
+    GAME.boardsCleared += 1;
+    if(GAME.boardsCleared >= GAME.boardsPerLevel){
+      uiFeedback.textContent = `Level ${GAME.level + 1} unlocked!`;
+      uiFeedback.className = 'feedback good';
+      nextRound();
+    }else{
+      startRound();
+      updateHud();
+    }
+  }else{
+    updateHud();
+    uiQuestion.textContent = `Break valid tokens only. Remaining: ${GAME.targetsRemaining}. Board ${GAME.boardsCleared + 1}/${GAME.boardsPerLevel}.`;
+  }
+}
+
+function handleWrongHit(){
+  GAME.compile = Math.max(0, GAME.compile - 12);
+  uiFeedback.textContent = 'Wrong keyword. Compile dropped.';
+  uiFeedback.className = 'feedback bad';
+  updateHud();
+}
+
+function applyPowerup(type){
+  if(type === 'shotgun'){
+    const baseBall = GAME.balls[0];
+    if(baseBall){
+      const speed = Math.max(3, Math.hypot(baseBall.vx, baseBall.vy));
+      const angles = [-0.8, 0.0, 0.8];
+      GAME.balls = angles.map(a=>{
+        const vx = Math.cos(a) * speed;
+        const vy = -Math.abs(Math.sin(a) * speed) - 2;
+        return createBall(baseBall.x, baseBall.y, vx, vy);
+      });
+      GAME.balls.forEach(b=>b.stuck = false);
+      GAME.launched = true;
+    }
+    GAME.activePower = 'Shotgun';
+  }else if(type === 'fireball'){
+    const wrongBlocks = GAME.blocks.filter(b=>b.alive && !b.valid);
+    if(wrongBlocks.length){
+      const target = wrongBlocks[Math.floor(Math.random() * wrongBlocks.length)];
+      target.alive = false;
+      uiFeedback.textContent = 'Fireball cleared a wrong block.';
+      uiFeedback.className = 'feedback good';
+    }
+    GAME.activePower = 'Fireball';
+  }else if(type === 'sticky'){
+    GAME.stickyCharges = 3;
+    GAME.activePower = 'Sticky';
+  }else if(type === 'slowmo'){
+    GAME.slowMoTimer = 600;
+    GAME.activePower = 'Slow-Mo';
+  }else if(type === 'longpaddle'){
+    GAME.longPaddleTimer = 600;
+    paddle.w = paddle.baseW * 1.45;
+    GAME.activePower = 'Long Paddle';
+  }else if(type === 'piercing'){
+    GAME.pierceTimer = 600;
+    GAME.activePower = 'Piercing';
+  }
+  updateHud();
+}
+
+function drawPaddle(){
+  ctx.save();
+  const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x + paddle.w, paddle.y);
+  grad.addColorStop(0, '#f59e0b');
+  grad.addColorStop(1, '#fbbf24');
+  ctx.fillStyle = grad;
+  ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+  ctx.restore();
+}
+
+function drawBall(){
+  ctx.save();
+  ctx.fillStyle = '#f8fafc';
+  GAME.balls.forEach(b=>{
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawBlocks(){
+  ctx.save();
+  ctx.font = 'bold 14px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  GAME.blocks.forEach(block=>{
+    if(!block.alive) return;
+    if(block.powerup){
+      ctx.save();
+      ctx.shadowColor = 'rgba(251,191,36,0.65)';
+      ctx.shadowBlur = 20;
+      const glow = ctx.createLinearGradient(block.x, block.y, block.x + block.w, block.y + block.h);
+      glow.addColorStop(0, 'rgba(251,191,36,0.35)');
+      glow.addColorStop(1, 'rgba(251,191,36,0.05)');
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = 5;
+      ctx.strokeRect(block.x - 3, block.y - 3, block.w + 6, block.h + 6);
+      ctx.restore();
+    }
+    const grad = ctx.createLinearGradient(block.x, block.y, block.x, block.y + block.h);
+    grad.addColorStop(0, '#3a5578');
+    grad.addColorStop(0.5, '#223650');
+    grad.addColorStop(1, '#17263a');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = '#4b6b8b';
+    ctx.lineWidth = 1.2;
+    ctx.fillRect(block.x, block.y, block.w, block.h);
+    ctx.strokeRect(block.x, block.y, block.w, block.h);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(block.x + 2, block.y + 2);
+    ctx.lineTo(block.x + block.w - 2, block.y + 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(block.x + 2, block.y + block.h - 2);
+    ctx.lineTo(block.x + block.w - 2, block.y + block.h - 2);
+    ctx.stroke();
+    ctx.restore();
+    if(block.powerup){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(251,191,36,0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(block.x + 2, block.y + 2, block.w - 4, block.h - 4);
+      ctx.restore();
+    }
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillText(block.label, block.x + block.w / 2, block.y + block.h / 2);
+  });
+  ctx.restore();
+}
+
+function drawPowerups(){
+  ctx.save();
+  GAME.powerups.forEach(p=>{
+    if(p.type === 'fireball') ctx.fillStyle = '#ef4444';
+    else if(p.type === 'shotgun') ctx.fillStyle = '#f59e0b';
+    else if(p.type === 'sticky') ctx.fillStyle = '#38bdf8';
+    else if(p.type === 'slowmo') ctx.fillStyle = '#a78bfa';
+    else if(p.type === 'longpaddle') ctx.fillStyle = '#22c55e';
+    else ctx.fillStyle = '#f472b6';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function update(){
+  if(!GAME.running) return;
+  GAME.powerups.forEach(p=>{ p.y += p.vy; });
+  GAME.powerups = GAME.powerups.filter(p=>p.y - p.r < canvas.height);
+  GAME.powerups.forEach(p=>{
+    const hit = p.y + p.r > paddle.y &&
+      p.x > paddle.x && p.x < paddle.x + paddle.w;
+    if(hit){
+      applyPowerup(p.type);
+      p.y = canvas.height + 100;
+    }
+  });
+
+  if(!GAME.launched){
+    GAME.balls.forEach(b=>{
+      if(b.stuck){
+        b.x = paddle.x + paddle.w / 2;
+        b.y = paddle.y - b.r - 2;
+      }
+    });
+    return;
+  }
+
+  const slowFactor = GAME.slowMoTimer > 0 ? 0.6 : 1;
+  GAME.balls.forEach(b=>{
+    if(b.stuck){
+      b.x = paddle.x + paddle.w / 2;
+      b.y = paddle.y - b.r - 2;
+      return;
+    }
+    b.x += b.vx * slowFactor;
+    b.y += b.vy * slowFactor;
+  });
+
+  GAME.balls.forEach(b=>{
+    if(b.x - b.r < 0 || b.x + b.r > canvas.width){
+      b.vx *= -1;
+    }
+    if(b.y - b.r < 0){
+      b.vy *= -1;
+    }
+  });
+  GAME.balls = GAME.balls.filter(b=>b.y - b.r <= canvas.height + 4);
+  if(GAME.balls.length === 0){
+    GAME.lives -= 1;
+    GAME.powerups = [];
+    updateHud();
+    if(GAME.lives <= 0){
+      endGame('Game over. Press Space to restart.');
+    }else{
+      resetBall();
+    }
+  }
+
+  GAME.balls.forEach(b=>{
+    if(b.y + b.r > paddle.y &&
+       b.x > paddle.x && b.x < paddle.x + paddle.w &&
+       b.y < paddle.y + paddle.h){
+      if(GAME.stickyCharges > 0){
+        b.stuck = true;
+        GAME.stickyCharges -= 1;
+        GAME.launched = false;
+        if(GAME.stickyCharges === 0 && GAME.activePower === 'Sticky'){
+          GAME.activePower = 'None';
+        }
+        updateHud();
+      }else{
+        b.vy = -Math.abs(b.vy);
+        const hitPos = (b.x - paddle.x) / paddle.w - 0.5;
+        b.vx = hitPos * 6 * GAME.speed;
+      }
+    }
+  });
+
+  GAME.blocks.forEach(block=>{
+    if(!block.alive) return;
+    GAME.balls.forEach(b=>{
+      if(!block.alive) return;
+      const closestX = Math.max(block.x, Math.min(b.x, block.x + block.w));
+      const closestY = Math.max(block.y, Math.min(b.y, block.y + block.h));
+      const dx = b.x - closestX;
+      const dy = b.y - closestY;
+      const hit = (dx * dx + dy * dy) <= (b.r * b.r);
+      if(hit){
+        if(GAME.pierceTimer <= 0){
+          if(Math.abs(dx) > Math.abs(dy)){
+            b.vx *= -1;
+            b.x = closestX + (dx >= 0 ? 1 : -1) * (b.r + 0.5);
+          }else{
+            b.vy *= -1;
+            b.y = closestY + (dy >= 0 ? 1 : -1) * (b.r + 0.5);
+          }
+        }
+        block.alive = false;
+        if(block.valid){
+          handleCorrectHit();
+        }else{
+          handleWrongHit();
+        }
+        if(block.powerup){
+          GAME.powerups.push({ x: block.x + block.w / 2, y: block.y + block.h / 2, r: 10, type: block.powerup, vy: 2.2 });
+        }
+      }
+    });
+  });
+
+  if(GAME.slowMoTimer > 0){
+    GAME.slowMoTimer -= 1;
+    if(GAME.slowMoTimer === 0 && GAME.activePower === 'Slow-Mo') GAME.activePower = 'None';
+  }
+  if(GAME.longPaddleTimer > 0){
+    GAME.longPaddleTimer -= 1;
+    if(GAME.longPaddleTimer === 0){
+      paddle.w = paddle.baseW;
+      if(GAME.activePower === 'Long Paddle') GAME.activePower = 'None';
+    }
+  }
+  if(GAME.pierceTimer > 0){
+    GAME.pierceTimer -= 1;
+    if(GAME.pierceTimer === 0 && GAME.activePower === 'Piercing') GAME.activePower = 'None';
+  }
+}
+
+function draw(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.fillStyle = '#0b1320';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  drawBlocks();
+  drawPaddle();
+  drawBall();
+  drawPowerups();
+
+  if(!GAME.running){
+    ctx.save();
+    ctx.fillStyle = 'rgba(2,6,23,0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 28px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press Space to Start', canvas.width / 2, canvas.height / 2 - 10);
+    ctx.font = '16px "Trebuchet MS", sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('Break the correct keyword block to progress.', canvas.width / 2, canvas.height / 2 + 20);
+    ctx.restore();
+  }
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+document.addEventListener('mousemove', (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  paddle.x = Math.max(10, Math.min(canvas.width - paddle.w - 10, x - paddle.w / 2));
+});
+
+document.addEventListener('keydown', (ev)=>{
+  if(ev.code === 'ArrowLeft') paddle.dx = -7;
+  if(ev.code === 'ArrowRight') paddle.dx = 7;
+  if(ev.code === 'Space'){
+    ev.preventDefault();
+    if(!GAME.running){
+      startGame();
+    }else{
+      const stuckBalls = GAME.balls.filter(b=>b.stuck);
+      if(stuckBalls.length){
+        stuckBalls.forEach(b=>{
+          const base = 2.6 + Math.random() * 1.2;
+          b.vx = (Math.random() < 0.5 ? -1 : 1) * base * GAME.speed;
+          b.vy = -(base + 0.6) * GAME.speed;
+          b.stuck = false;
+        });
+        GAME.launched = true;
+      }else if(!GAME.launched){
+        GAME.launched = true;
+      }
+    }
+  }
+});
+
+document.addEventListener('keyup', (ev)=>{
+  if(ev.code === 'ArrowLeft' || ev.code === 'ArrowRight') paddle.dx = 0;
+});
+
+setInterval(()=>{
+  if(!GAME.running) return;
+  paddle.x += paddle.dx;
+  paddle.x = Math.max(10, Math.min(canvas.width - paddle.w - 10, paddle.x));
+}, 16);
+
+updateHud();
+loop();
+</script>
+</body>
+</html>
