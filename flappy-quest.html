@@ -81,6 +81,13 @@
     font-size:15px;
     line-height:1.4;
   }
+  .questionText code{
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    font-size:14px;
+    background:rgba(15,23,42,0.12);
+    padding:2px 6px;
+    border-radius:6px;
+  }
   .legend{
     font-size:12px;
     color:var(--muted);
@@ -97,6 +104,13 @@
     <div class="topbar">
       <div class="title">Flappy Code</div>
       <div class="hud">
+        <div class="pill">
+          Chapter:
+          <select id="chapterSelect" aria-label="Select chapter">
+            <option value="1">1</option>
+          </select>
+        </div>
+        <div class="pill">Level: <span id="level">1</span></div>
         <div class="pill">Lives: <span id="lives">3</span></div>
         <div class="pill">Speed: <span id="speed">2.0</span></div>
         <div class="pill">Streak: <span id="streak">0</span></div>
@@ -119,8 +133,20 @@ const ctx = canvas.getContext('2d');
 const uiLives = document.getElementById('lives');
 const uiSpeed = document.getElementById('speed');
 const uiStreak = document.getElementById('streak');
+const uiLevel = document.getElementById('level');
+const uiChapterSelect = document.getElementById('chapterSelect');
 const uiQuestion = document.getElementById('questionText');
 const uiFeedback = document.getElementById('feedback');
+
+const STORAGE_KEY = 'flappycode.progress.v1';
+
+const CLOUDS = Array.from({length:8}, (_, i)=>({
+  x: Math.random() * canvas.width,
+  y: 40 + Math.random() * 180,
+  w: 120 + Math.random() * 140,
+  h: 28 + Math.random() * 26,
+  speed: 0.12 + (i % 3) * 0.05
+}));
 
 const GAME = {
   running: false,
@@ -128,8 +154,16 @@ const GAME = {
   lives: 3,
   speed: 1.4,
   streak: 0,
-  gravity: 0.07,
-  flap: -4.4,
+  level: 1,
+  unlockedLevel: 1,
+  selectedLevel: 1,
+  correctSet: new Set(),
+  seenSet: new Set(),
+  missedSet: new Set(),
+  chapterComplete: false,
+  gravity: 0.05,
+  flap: -3.6,
+  bgOffset: 0,
   wallGapHeight: 160,
   wallWidth: 80,
   wallX: 0,
@@ -146,55 +180,175 @@ const bird = {
   x: 150,
   y: canvas.height / 2,
   r: 16,
-  vy: 0
+  vy: 0,
+  flapTimer: 0
 };
 
 const GAP_CENTERS = [160, 380];
 
 const QUESTIONS = [
   {
+    id: 'c1_q1',
+    level: 1,
     q: 'Which line reads input from the user?',
     options: ['Console.ReadLine()', 'Console.WriteLine()'],
     answer: 0
   },
   {
+    id: 'c1_q2',
+    level: 1,
     q: 'Which prints without adding a new line?',
     options: ['Console.Write()', 'Console.WriteLine()'],
     answer: 0
   },
   {
-    q: 'What is the result of int x = 5 / 2; ?',
+    id: 'c1_q3',
+    level: 1,
+    q: 'What is the result of `int x = 5 / 2;`?',
     options: ['2', '2.5'],
     answer: 0
   },
   {
+    id: 'c2_q1',
+    level: 2,
     q: 'Which is an auto-implemented property?',
     options: ['public int Age { get; set; }', 'public int Age;'],
     answer: 0
   },
   {
+    id: 'c2_q2',
+    level: 2,
     q: 'Which line calls a method named Print?',
     options: ['Print();', 'void Print()'],
     answer: 0
   },
   {
+    id: 'c1_q4',
+    level: 1,
     q: 'Which uses string interpolation?',
     options: ['Console.WriteLine($"Hi {name}")', 'Console.WriteLine("Hi {name}")'],
     answer: 0
   },
   {
+    id: 'c4_q1',
+    level: 4,
     q: 'Which loop is best when iterations are unknown?',
     options: ['while', 'for'],
     answer: 0
   },
   {
+    id: 'c5_q1',
+    level: 5,
     q: 'Which line gets a random number 1 to 3?',
     options: ['r.Next(1,4)', 'r.Next(1,3)'],
     answer: 0
+  },
+  {
+    id: 'c3_q1',
+    level: 3,
+    q: 'What prints? `int x = 3; Console.WriteLine(x == 3);`',
+    options: ['true', 'false'],
+    answer: 0
+  },
+  {
+    id: 'c3_q2',
+    level: 3,
+    q: 'Which is a ternary operator example?',
+    options: ['x > 0 ? "A" : "B"', 'if(x > 0) "A"'],
+    answer: 0
+  },
+  {
+    id: 'c4_q2',
+    level: 4,
+    q: 'What loop repeats while a condition is true?',
+    options: ['while', 'switch'],
+    answer: 0
+  },
+  {
+    id: 'c5_q2',
+    level: 5,
+    q: 'How do you access a static field Count on Counter?',
+    options: ['Counter.Count', 'new Counter().Count'],
+    answer: 0
+  },
+  {
+    id: 'c5_q3',
+    level: 5,
+    q: 'What prints? `enum Day { Mon, Tue } Day d = Day.Mon;`',
+    options: ['Mon', '0'],
+    answer: 0
+  },
+  {
+    id: 'c6_q1',
+    level: 6,
+    q: 'Which is a lambda expression?',
+    options: ['x => x * 2', 'x * 2'],
+    answer: 0
+  },
+  {
+    id: 'c6_q2',
+    level: 6,
+    q: 'Which line defines a method that returns int?',
+    options: ['int Add(){ return 1; }', 'void Add(){ return 1; }'],
+    answer: 0
+  },
+  {
+    id: 'c7_q1',
+    level: 7,
+    q: 'Which collection enforces unique values?',
+    options: ['HashSet', 'List'],
+    answer: 0
+  },
+  {
+    id: 'c7_q2',
+    level: 7,
+    q: 'What causes this error? `int[] a = new int[2]; a[2]=3;`',
+    options: ['Index out of range', 'Missing semicolon'],
+    answer: 0
+  },
+  {
+    id: 'c8_q1',
+    level: 8,
+    q: 'Which symbol is used to inherit in C#?',
+    options: [':', 'extends'],
+    answer: 0
+  },
+  {
+    id: 'c8_q2',
+    level: 8,
+    q: 'Polymorphism means...',
+    options: ['Many forms of behavior', 'Many variables'],
+    answer: 0
+  },
+  {
+    id: 'c8_q3',
+    level: 8,
+    q: 'Which keyword lets a method be overridden?',
+    options: ['virtual', 'static'],
+    answer: 0
+  },
+  {
+    id: 'c8_q4',
+    level: 8,
+    q: 'Which keyword overrides a base method?',
+    options: ['override', 'new'],
+    answer: 0
+  },
+  {
+    id: 'c8_q5',
+    level: 8,
+    q: 'Inheritance describes an...',
+    options: ['is-a relationship', 'has-a relationship'],
+    answer: 0
+  },
+  {
+    id: 'c8_q6',
+    level: 8,
+    q: 'Which keyword prevents creating instances?',
+    options: ['abstract', 'public'],
+    answer: 0
   }
 ];
-
-let questionIndex = 0;
 
 function shuffleArray(arr){
   for(let i = arr.length - 1; i > 0; i--){
@@ -204,10 +358,56 @@ function shuffleArray(arr){
   return arr;
 }
 
+function formatQuestion(text){
+  return String(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function saveProgress(){
+  const data = {
+    unlockedLevel: GAME.unlockedLevel,
+    selectedLevel: GAME.selectedLevel
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const parsed = JSON.parse(raw);
+    if(typeof parsed.unlockedLevel === 'number'){
+      GAME.unlockedLevel = Math.min(8, Math.max(1, parsed.unlockedLevel));
+    }
+    if(typeof parsed.selectedLevel === 'number'){
+      GAME.selectedLevel = Math.min(GAME.unlockedLevel, Math.max(1, parsed.selectedLevel));
+    }
+  }catch(e){
+    console.error(e);
+  }
+}
+
+function updateChapterSelect(){
+  uiChapterSelect.innerHTML = '';
+  for(let i = 1; i <= GAME.unlockedLevel; i++){
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = String(i);
+    if(i === GAME.selectedLevel) opt.selected = true;
+    uiChapterSelect.appendChild(opt);
+  }
+}
+
 function nextQuestion(){
-  const q = QUESTIONS[questionIndex % QUESTIONS.length];
-  questionIndex++;
+  const pool = QUESTIONS.filter(q => q.level === GAME.level);
+  const unseen = pool.filter(q => !GAME.seenSet.has(q.id));
+  const missed = pool.filter(q => GAME.missedSet.has(q.id));
+  const pickFrom = unseen.length ? unseen : (missed.length ? missed : pool);
+  if(pickFrom.length === 0) return null;
+  const q = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  if(!q) return null;
+  GAME.seenSet.add(q.id);
   return {
+    id: q.id,
     text: q.q,
     options: q.options.slice(),
     answer: q.answer
@@ -225,18 +425,28 @@ function resetWall(){
   GAME.hitGapIndex = null;
   GAME.hitCorrect = false;
   GAME.activeQuestion = nextQuestion();
+  if(!GAME.activeQuestion){
+    GAME.activeQuestion = { text:'No questions available.', options:['OK','OK'], answer:0 };
+  }
   const shuffled = shuffleArray(GAME.activeQuestion.options.map((opt, idx)=>({opt, idx})));
   GAME.activeQuestion.options = shuffled.map(item=>item.opt);
   GAME.correctGapIndex = shuffled.findIndex(item=>item.idx === GAME.activeQuestion.answer);
-  uiQuestion.textContent = GAME.activeQuestion.text;
+  if(GAME.running){
+    uiQuestion.innerHTML = formatQuestion(GAME.activeQuestion.text);
+  }
 }
 
 function startGame(){
   GAME.running = true;
   GAME.over = false;
+  GAME.chapterComplete = false;
   GAME.lives = 3;
   GAME.speed = 1.4;
   GAME.streak = 0;
+  GAME.level = GAME.selectedLevel;
+  GAME.correctSet = new Set();
+  GAME.seenSet = new Set();
+  GAME.missedSet = new Set();
   uiFeedback.textContent = '';
   resetBird();
   resetWall();
@@ -247,6 +457,7 @@ function updateHud(){
   uiLives.textContent = GAME.lives;
   uiSpeed.textContent = GAME.speed.toFixed(1);
   uiStreak.textContent = GAME.streak;
+  uiLevel.textContent = GAME.level;
 }
 
 function drawCapsule(x, y, w, h, text, state){
@@ -280,7 +491,7 @@ function drawCapsule(x, y, w, h, text, state){
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+  ctx.font = 'bold 13px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2);
@@ -305,18 +516,27 @@ function drawWall(){
   }
 
   ctx.save();
-  ctx.fillStyle = '#1b2638';
-  ctx.strokeStyle = '#2b3a52';
+  const wallGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+  wallGrad.addColorStop(0, '#1b2b44');
+  wallGrad.addColorStop(0.5, '#2f4a6b');
+  wallGrad.addColorStop(1, '#1b2b44');
+  ctx.fillStyle = wallGrad;
+  ctx.strokeStyle = '#4b6b8b';
   wallSegments.forEach(seg=>{
     if(seg.h <= 0) return;
     ctx.fillRect(x, seg.y, w, seg.h);
     ctx.strokeRect(x, seg.y, w, seg.h);
+    if(seg.h > 22){
+      for(let y = seg.y + 10; y + 10 < seg.y + seg.h; y += 24){
+        ctx.strokeRect(x + 8, y, w - 16, 10);
+      }
+    }
   });
   ctx.restore();
 
   const capsuleH = 34;
   ctx.save();
-  ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+  ctx.font = 'bold 13px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
   GAME.activeQuestion.options.forEach((opt, idx)=>{
     const padding = 26;
     const textW = ctx.measureText(opt).width;
@@ -341,6 +561,19 @@ function drawBird(){
   ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  const flapPhase = bird.flapTimer > 0 ? Math.sin(bird.flapTimer * 0.25) : 0;
+  const wingLift = 6 + flapPhase * 5;
+  ctx.fillStyle = '#fde68a';
+  ctx.beginPath();
+  ctx.ellipse(bird.x - 6, bird.y + wingLift, 16, 8, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#f97316';
+  ctx.beginPath();
+  ctx.moveTo(bird.x + bird.r + 2, bird.y - 2);
+  ctx.lineTo(bird.x + bird.r + 12, bird.y + 2);
+  ctx.lineTo(bird.x + bird.r + 2, bird.y + 6);
+  ctx.closePath();
+  ctx.fill();
   ctx.fillStyle = '#1f2937';
   ctx.beginPath();
   ctx.arc(bird.x + 6, bird.y - 4, 3, 0, Math.PI * 2);
@@ -353,9 +586,10 @@ function checkCollision(){
   const w = GAME.wallWidth;
   if(bird.x + bird.r < x || bird.x - bird.r > x + w) return;
 
+  const gapBuffer = 12;
   const inGap = GAP_CENTERS.some(center=>{
-    const top = center - GAME.wallGapHeight / 2;
-    const bottom = center + GAME.wallGapHeight / 2;
+    const top = center - GAME.wallGapHeight / 2 - gapBuffer;
+    const bottom = center + GAME.wallGapHeight / 2 + gapBuffer;
     return bird.y > top && bird.y < bottom;
   });
 
@@ -392,10 +626,26 @@ function handleCorrect(gapIndex){
   GAME.hitCorrect = true;
   GAME.speed += 0.1;
   GAME.streak += 1;
+  if(GAME.activeQuestion && GAME.activeQuestion.id){
+    GAME.correctSet.add(GAME.activeQuestion.id);
+    const totalForLevel = QUESTIONS.filter(q => q.level === GAME.level).length;
+    if(GAME.correctSet.size >= totalForLevel && GAME.level < 8){
+      GAME.unlockedLevel = Math.max(GAME.unlockedLevel, GAME.level + 1);
+      updateChapterSelect();
+      saveProgress();
+      uiFeedback.textContent = 'Chapter unlocked! Pick a chapter to continue.';
+      uiFeedback.className = 'feedback good';
+      uiQuestion.textContent = 'Chapter complete. Select a chapter, then press Space.';
+      GAME.running = false;
+      GAME.chapterComplete = true;
+    }
+  }
   GAME.lastResult = 'Correct! Speed up.';
   GAME.lastResultType = 'good';
-  uiFeedback.textContent = GAME.lastResult;
-  uiFeedback.className = 'feedback good';
+  if(!GAME.chapterComplete){
+    uiFeedback.textContent = GAME.lastResult;
+    uiFeedback.className = 'feedback good';
+  }
   updateHud();
 }
 
@@ -405,6 +655,9 @@ function handleWrong(gapIndex){
   GAME.hitGapIndex = gapIndex;
   GAME.hitCorrect = false;
   GAME.lives -= 1;
+  if(GAME.activeQuestion && GAME.activeQuestion.id){
+    GAME.missedSet.add(GAME.activeQuestion.id);
+  }
   GAME.streak = 0;
   GAME.lastResult = 'Wrong answer. -1 life.';
   GAME.lastResultType = 'bad';
@@ -420,6 +673,9 @@ function handleMissed(){
   if(GAME.answered) return;
   GAME.answered = true;
   GAME.lives -= 1;
+  if(GAME.activeQuestion && GAME.activeQuestion.id){
+    GAME.missedSet.add(GAME.activeQuestion.id);
+  }
   GAME.streak = 0;
   GAME.lastResult = 'Missed a capsule. -1 life.';
   GAME.lastResultType = 'bad';
@@ -433,6 +689,9 @@ function handleMissed(){
 
 function handleHit(msg){
   GAME.lives -= 1;
+  if(GAME.activeQuestion && GAME.activeQuestion.id){
+    GAME.missedSet.add(GAME.activeQuestion.id);
+  }
   GAME.streak = 0;
   GAME.lastResult = msg + ' -1 life.';
   GAME.lastResultType = 'bad';
@@ -457,6 +716,7 @@ function update(){
   if(!GAME.running) return;
   bird.vy += GAME.gravity;
   bird.y += bird.vy;
+  if(bird.flapTimer > 0) bird.flapTimer -= 1;
 
   if(bird.y - bird.r < 0){
     bird.y = bird.r;
@@ -466,6 +726,7 @@ function update(){
     handleHit('Hit the ground!');
   }
 
+  GAME.bgOffset += GAME.speed * 0.6;
   GAME.wallX -= GAME.speed;
   if(GAME.wallX + GAME.wallWidth < bird.x && !GAME.answered){
     handleMissed();
@@ -478,13 +739,67 @@ function update(){
   checkCollision();
 }
 
+function drawBackground(){
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, '#8fd3ff');
+  grad.addColorStop(0.55, '#bfe8ff');
+  grad.addColorStop(1, '#e9f6ff');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  CLOUDS.forEach(cloud=>{
+    const x = (cloud.x - GAME.bgOffset * cloud.speed) % (canvas.width + 200);
+    const cx = x < -200 ? x + canvas.width + 200 : x;
+    const rx = cloud.w * 0.28;
+    const ry = cloud.h * 0.6;
+    ctx.beginPath();
+    ctx.ellipse(cx, cloud.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + cloud.w * 0.18, cloud.y - 8, cloud.w * 0.24, cloud.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx - cloud.w * 0.18, cloud.y - 6, cloud.w * 0.22, cloud.h * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+
+  const skylineY = canvas.height - 140;
+  ctx.save();
+  ctx.fillStyle = '#8aa4bf';
+  for(let i = 0; i < 18; i++){
+    const w = 30 + (i % 4) * 12;
+    const h = 40 + (i % 6) * 18;
+    const x = (i * 55 - (GAME.bgOffset * 0.25)) % (canvas.width + 60);
+    const bx = x < -60 ? x + canvas.width + 60 : x;
+    ctx.fillRect(bx, skylineY - h, w, h);
+  }
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = '#a8c3dc';
+  for(let i = 0; i < 10; i++){
+    const w = 50 + (i % 3) * 18;
+    const h = 55 + (i % 4) * 20;
+    const x = (i * 85 - (GAME.bgOffset * 0.12)) % (canvas.width + 80);
+    const bx = x < -80 ? x + canvas.width + 80 : x;
+    ctx.fillRect(bx, skylineY - h - 15, w, h);
+  }
+  ctx.restore();
+
+  ctx.save();
+  const groundGrad = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
+  groundGrad.addColorStop(0, '#cfe9fb');
+  groundGrad.addColorStop(1, '#b3d8f2');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
+  ctx.restore();
+}
+
 function draw(){
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.save();
-  ctx.fillStyle = '#0b1320';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
+  drawBackground();
 
   drawWall();
   drawBird();
@@ -516,9 +831,23 @@ document.addEventListener('keydown', (ev)=>{
   if(!GAME.running){
     startGame();
   }
+  bird.flapTimer = 24;
   bird.vy = GAME.flap;
 });
 
+uiChapterSelect.addEventListener('change', (ev)=>{
+  GAME.selectedLevel = parseInt(ev.target.value, 10) || 1;
+  saveProgress();
+  if(GAME.running){
+    startGame();
+  }else{
+    GAME.level = GAME.selectedLevel;
+    updateHud();
+  }
+});
+
+loadProgress();
+updateChapterSelect();
 resetWall();
 updateHud();
 loop();
