@@ -123,11 +123,13 @@ body{
   display:flex;
   flex-direction:column;
   background:radial-gradient(circle at 80% 20%, rgba(45,212,191,0.15), transparent 40%);
+  min-height:560px;
 }
 .canvasWrap{
   position:relative;
   flex:1;
   background:linear-gradient(180deg, rgba(15,23,42,0.8), rgba(2,6,23,0.9));
+  min-height:520px;
 }
 canvas{
   width:100%;
@@ -141,6 +143,109 @@ canvas{
   display:flex;
   gap:10px;
   align-items:center;
+}
+.healthBar{
+  position:absolute;
+  top:12px;
+  right:12px;
+  width:min(360px, 60%);
+  height:12px;
+  background:rgba(8,12,18,0.7);
+  border:1px solid var(--line);
+  border-radius:999px;
+  overflow:hidden;
+}
+.healthFill{
+  height:100%;
+  width:100%;
+  background:linear-gradient(90deg, var(--good), #16a34a);
+  transition:width .2s ease;
+}
+.healthText{
+  position:absolute;
+  top:-18px;
+  right:8px;
+  font-size:11px;
+  color:var(--muted);
+}
+#minimap{
+  position:absolute;
+  top:44px;
+  right:12px;
+  width:150px;
+  height:150px;
+  background:rgba(8,12,18,0.7);
+  border:1px solid var(--line);
+  border-radius:10px;
+  image-rendering: pixelated;
+}
+.hudBottom{
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  background:rgba(10,16,26,0.55);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:8px 12px;
+  backdrop-filter: blur(6px);
+}
+.hudItem{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.hudIcon{
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  background:rgba(15,23,42,0.9);
+  border:1px solid var(--line);
+  position:relative;
+}
+.shardIcon::before{
+  content:"";
+  position:absolute;
+  inset:3px;
+  background:linear-gradient(135deg, var(--accent-2), var(--accent));
+  clip-path:polygon(50% 0, 100% 40%, 80% 100%, 20% 100%, 0 40%);
+}
+.shieldIcon::before{
+  content:"";
+  position:absolute;
+  inset:3px;
+  background:linear-gradient(180deg, #22c55e, #15803d);
+  clip-path:polygon(50% 0, 100% 25%, 82% 100%, 18% 100%, 0 25%);
+}
+.hudMeter{
+  width:140px;
+  height:6px;
+  background:rgba(8,12,18,0.8);
+  border:1px solid var(--line);
+  border-radius:999px;
+  overflow:hidden;
+}
+.hudMeterFill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition:width .2s ease;
+}
+.hudValue{
+  font-size:12px;
+  color:var(--text);
+  font-weight:700;
+  min-width:48px;
+}
+.hudTimer{
+  font-size:13px;
+  font-weight:700;
+  color:var(--text);
 }
 .chip{
   background:rgba(15,23,42,0.8);
@@ -245,6 +350,9 @@ canvas{
 @media (max-width: 980px){
   .shell{grid-template-columns:1fr}
   .sidebar{order:2}
+  .healthBar{width:50%}
+  .hudBottom{flex-wrap:wrap; justify-content:flex-start}
+  .hudMeter{width:110px}
 }
 </style>
 </head>
@@ -256,14 +364,10 @@ canvas{
       <div class="subtitle">Race through a neon vault, hack terminals, and unlock the portal by solving coding challenges.</div>
     </div>
     <div class="panel">
-      <div class="stat"><div>Time Shards</div><div id="shards">0 / 3</div></div>
-      <div class="stat"><div>Integrity</div><div id="hp">100%</div></div>
-      <div class="stat"><div>Run Timer</div><div id="clock">00:00</div></div>
-    </div>
-    <div class="panel">
       <div class="stat"><div>Objective</div><div class="badge"><span>!</span> Open the Time Gate</div></div>
       <div class="controls">
-        WASD to move, Arrow keys to rotate.<br />
+        WASD to move, Mouse to look.<br />
+        Click or press WASD to lock the pointer.<br />
         Press E near a terminal to answer.<br />
         Solve 3 terminals to unlock the portal.
       </div>
@@ -289,6 +393,28 @@ canvas{
       <div class="hudTop">
         <div class="chip" id="locationChip">Sector 01</div>
         <div class="chip" id="hintChip">Find a terminal</div>
+      </div>
+      <canvas id="minimap" width="160" height="160" aria-label="Mini-map"></canvas>
+      <div class="healthBar">
+        <div class="healthFill" id="healthFill"></div>
+        <div class="healthText">Integrity <span id="hp">100%</span></div>
+      </div>
+      <div class="hudBottom" aria-live="polite">
+        <div class="hudItem">
+          <div class="hudIcon shardIcon" aria-hidden="true"></div>
+          <div class="hudMeter">
+            <div class="hudMeterFill" id="shardsFill"></div>
+          </div>
+          <div class="hudValue" id="shards">0 / 3</div>
+        </div>
+        <div class="hudItem">
+          <div class="hudIcon shieldIcon" aria-hidden="true"></div>
+          <div class="hudMeter">
+            <div class="hudMeterFill" id="integrityFill"></div>
+          </div>
+          <div class="hudValue" id="integrityText">100%</div>
+        </div>
+        <div class="hudTimer" id="clock">00:00</div>
       </div>
       <div class="crosshair"></div>
       <div class="overlay" id="terminalOverlay" role="dialog" aria-modal="true" aria-label="Terminal Challenge">
@@ -325,6 +451,8 @@ canvas{
 <script>
 const canvas = document.getElementById("view");
 const ctx = canvas.getContext("2d");
+const minimap = document.getElementById("minimap");
+const mapCtx = minimap.getContext("2d");
 const startBtn = document.getElementById("startBtn");
 const resetBtn = document.getElementById("resetBtn");
 const startOverlay = document.getElementById("startOverlay");
@@ -337,19 +465,30 @@ const terminalAnswers = document.getElementById("terminalAnswers");
 const terminalStatus = document.getElementById("terminalStatus");
 const shardsEl = document.getElementById("shards");
 const hpEl = document.getElementById("hp");
+const integrityText = document.getElementById("integrityText");
+const healthFill = document.getElementById("healthFill");
+const shardsFill = document.getElementById("shardsFill");
+const integrityFill = document.getElementById("integrityFill");
 const clockEl = document.getElementById("clock");
 const hintChip = document.getElementById("hintChip");
+
+const wallTexture = new Image();
+let wallTextureReady = false;
+wallTexture.src = "images/wallpanel.png";
+wallTexture.onload = () => {
+  wallTextureReady = true;
+};
 
 const map = [
   [1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,2,0,1],
-  [1,0,1,1,0,1,1,0,1,0,1],
+  [1,0,1,4,0,1,1,0,1,0,1],
   [1,0,1,0,0,0,1,0,1,0,1],
   [1,0,1,0,1,0,1,0,0,0,1],
   [1,0,0,0,1,0,0,0,1,0,1],
-  [1,0,1,0,1,1,1,0,1,0,1],
+  [1,0,1,0,1,4,1,0,1,0,1],
   [1,0,1,0,0,0,0,0,1,0,1],
-  [1,0,0,0,1,1,1,0,0,3,1],
+  [1,0,0,0,1,4,1,0,0,0,1],
   [1,2,1,0,0,0,0,0,1,0,1],
   [1,1,1,1,1,1,1,1,1,1,1]
 ];
@@ -363,21 +502,21 @@ const doors = [
 const terminals = [
   {
     id:0,
-    x:4.5,
-    y:1.5,
+    x:3.5,
+    y:2.5,
     title:"Terminal 01: Output Trace",
     prompt:"What does this C# snippet print?",
-    code:'int total = 0;\\nfor (int i = 1; i <= 3; i++) {\\n  total += i;\\n}\\nConsole.WriteLine(total);',
+    code:"int total = 0;\nfor (int i = 1; i <= 3; i++) {\n  total += i;\n}\nConsole.WriteLine(total);",
     options:["3","6","9","12"],
     answer:1
   },
   {
     id:1,
-    x:2.5,
-    y:7.5,
+    x:5.5,
+    y:6.5,
     title:"Terminal 02: Fix the Bug",
     prompt:"Choose the fix that prevents a null reference.",
-    code:'string name = null;\\nif (name.Length > 0) {\\n  Console.WriteLine(name);\\n}',
+    code:"string name = null;\nif (name.Length > 0) {\n  Console.WriteLine(name);\n}",
     options:[
       "Check name != null before name.Length",
       "Replace name.Length with name.Count()",
@@ -388,11 +527,11 @@ const terminals = [
   },
   {
     id:2,
-    x:7.5,
-    y:5.5,
+    x:5.5,
+    y:8.5,
     title:"Terminal 03: Logic Gate",
     prompt:"Which option makes this function return true only for even numbers?",
-    code:'bool IsEven(int n) {\\n  return ____;\\n}',
+    code:"bool IsEven(int n) {\n  return ____;\n}",
     options:[
       "n / 2 == 0",
       "n % 2 == 0",
@@ -404,11 +543,14 @@ const terminals = [
 ];
 
 const state = {
-  x:2.5,
-  y:2.5,
+  x:1.5,
+  y:1.5,
   angle:0,
   moveSpeed:0.04,
   rotSpeed:0.045,
+  mouseSensitivity:0.0024,
+  interactionRange:1.6,
+  radius:0.2,
   keys:{},
   shards:0,
   hp:100,
@@ -423,6 +565,9 @@ function resizeCanvas(){
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.floor(rect.width * window.devicePixelRatio);
   canvas.height = Math.floor(rect.height * window.devicePixelRatio);
+  const miniRect = minimap.getBoundingClientRect();
+  minimap.width = Math.floor(miniRect.width * window.devicePixelRatio);
+  minimap.height = Math.floor(miniRect.height * window.devicePixelRatio);
 }
 
 function pad(num){
@@ -443,8 +588,8 @@ function startRun(){
 }
 
 function resetRun(){
-  state.x = 2.5;
-  state.y = 2.5;
+  state.x = 1.5;
+  state.y = 1.5;
   state.angle = 0;
   state.shards = 0;
   state.hp = 100;
@@ -452,9 +597,14 @@ function resetRun(){
   state.running = false;
   state.paused = false;
   state.win = false;
-  terminals.forEach(t => t.solved = false);
+  terminals.forEach(t => {
+    t.solved = false;
+    const tx = Math.floor(t.x);
+    const ty = Math.floor(t.y);
+    map[ty][tx] = 4;
+  });
   doors.forEach(d => {d.open = false; map[d.y][d.x] = 2;});
-  map[8][9] = 3;
+  map[8][9] = 0;
   startOverlay.classList.add("show");
   winOverlay.classList.remove("show");
   terminalOverlay.classList.remove("show");
@@ -464,6 +614,10 @@ function resetRun(){
 function updateHud(){
   shardsEl.textContent = `${state.shards} / 3`;
   hpEl.textContent = `${state.hp}%`;
+  integrityText.textContent = `${state.hp}%`;
+  healthFill.style.width = `${state.hp}%`;
+  shardsFill.style.width = `${(state.shards / 3) * 100}%`;
+  integrityFill.style.width = `${state.hp}%`;
   updateClock();
 }
 
@@ -473,7 +627,7 @@ function distance(a,b,c,d){
 
 function nearestTerminal(){
   let nearest = null;
-  let bestDist = 1.2;
+  let bestDist = state.interactionRange;
   terminals.forEach(term => {
     if (term.solved) return;
     const dist = distance(state.x, state.y, term.x, term.y);
@@ -488,6 +642,9 @@ function nearestTerminal(){
 function openTerminal(term){
   state.activeTerminal = term;
   state.paused = true;
+  if (document.pointerLockElement === canvas) {
+    document.exitPointerLock();
+  }
   terminalTitle.textContent = term.title;
   terminalPrompt.textContent = term.prompt;
   terminalCode.textContent = term.code;
@@ -516,6 +673,9 @@ function selectAnswer(idx){
     terminalStatus.textContent = "Access granted. Door unlocked.";
     term.solved = true;
     state.shards += 1;
+    const tx = Math.floor(term.x);
+    const ty = Math.floor(term.y);
+    map[ty][tx] = 5;
     const door = doors.find(d => d.id === term.id);
     if (door) {
       door.open = true;
@@ -544,6 +704,32 @@ function isWall(x,y){
   return map[my][mx] !== 0;
 }
 
+function isBlocked(x,y){
+  const r = state.radius;
+  const offsets = [
+    [0,0],[r,0],[-r,0],[0,r],[0,-r],
+    [r,r],[r,-r],[-r,r],[-r,-r]
+  ];
+  return offsets.some(([ox, oy]) => isWall(x + ox, y + oy));
+}
+
+function alignToCorridor(){
+  const mx = Math.floor(state.x);
+  const my = Math.floor(state.y);
+  if (my < 0 || my >= map.length || mx < 0 || mx >= map[0].length) return;
+  if (map[my][mx] !== 0) return;
+  const left = map[my][mx - 1] !== 0;
+  const right = map[my][mx + 1] !== 0;
+  const up = map[my - 1] && map[my - 1][mx] !== 0;
+  const down = map[my + 1] && map[my + 1][mx] !== 0;
+  if (left && right) {
+    state.x = mx + 0.5;
+  }
+  if (up && down) {
+    state.y = my + 0.5;
+  }
+}
+
 function render(){
   const w = canvas.width;
   const h = canvas.height;
@@ -556,54 +742,240 @@ function render(){
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0,0,w,h);
 
-  const fov = Math.PI / 3;
+  const fov = Math.PI / 3.3;
   const rays = w;
+  const depth = new Float32Array(rays);
+  const plane = Math.tan(fov / 2);
+  const dirX = Math.cos(state.angle);
+  const dirY = Math.sin(state.angle);
+  const planeX = -dirY * plane;
+  const planeY = dirX * plane;
   for (let i = 0; i < rays; i++) {
-    const rayAngle = (state.angle - fov/2) + (i / rays) * fov;
-    const sin = Math.sin(rayAngle);
-    const cos = Math.cos(rayAngle);
-    let dist = 0;
+    const cameraX = (2 * i / rays) - 1;
+    const rayDirX = dirX + planeX * cameraX;
+    const rayDirY = dirY + planeY * cameraX;
+
+    let mapX = Math.floor(state.x);
+    let mapY = Math.floor(state.y);
+    const deltaDistX = Math.abs(1 / (rayDirX === 0 ? 0.0001 : rayDirX));
+    const deltaDistY = Math.abs(1 / (rayDirY === 0 ? 0.0001 : rayDirY));
+    let stepX = 0;
+    let stepY = 0;
+    let sideDistX = 0;
+    let sideDistY = 0;
+    if (rayDirX < 0) {
+      stepX = -1;
+      sideDistX = (state.x - mapX) * deltaDistX;
+    } else {
+      stepX = 1;
+      sideDistX = (mapX + 1.0 - state.x) * deltaDistX;
+    }
+    if (rayDirY < 0) {
+      stepY = -1;
+      sideDistY = (state.y - mapY) * deltaDistY;
+    } else {
+      stepY = 1;
+      sideDistY = (mapY + 1.0 - state.y) * deltaDistY;
+    }
     let hit = 0;
-    while (dist < 16 && hit === 0) {
-      dist += 0.02;
-      const testX = state.x + cos * dist;
-      const testY = state.y + sin * dist;
-      if (testY < 0 || testY >= map.length || testX < 0 || testX >= map[0].length) {
+    let side = 0;
+    let hitX = 0;
+    let hitY = 0;
+    for (let step = 0; step < 64 && hit === 0; step++) {
+      if (sideDistX < sideDistY) {
+        sideDistX += deltaDistX;
+        mapX += stepX;
+        side = 0;
+      } else {
+        sideDistY += deltaDistY;
+        mapY += stepY;
+        side = 1;
+      }
+      if (mapY < 0 || mapY >= map.length || mapX < 0 || mapX >= map[0].length) {
         hit = 1;
-        dist = 16;
-      } else if (map[Math.floor(testY)][Math.floor(testX)] !== 0) {
-        hit = map[Math.floor(testY)][Math.floor(testX)];
+        break;
+      }
+      if (map[mapY][mapX] !== 0) {
+        hit = map[mapY][mapX];
+        hitX = state.x + rayDirX * (side === 0 ? (sideDistX - deltaDistX) : (sideDistY - deltaDistY));
+        hitY = state.y + rayDirY * (side === 0 ? (sideDistX - deltaDistX) : (sideDistY - deltaDistY));
       }
     }
-    const corrected = dist * Math.cos(rayAngle - state.angle);
-    const wallHeight = Math.min(h, h / (corrected + 0.0001));
+    const perpWallDist = side === 0
+      ? (mapX - state.x + (1 - stepX) / 2) / (rayDirX === 0 ? 0.0001 : rayDirX)
+      : (mapY - state.y + (1 - stepY) / 2) / (rayDirY === 0 ? 0.0001 : rayDirY);
+    const corrected = Math.max(0.0001, perpWallDist);
+    let wallHeight = h / (corrected + 0.0001);
+    if (side === 1) wallHeight *= 0.95;
+    wallHeight = Math.min(h, wallHeight);
     const wallTop = (h - wallHeight) / 2;
-
+    depth[i] = corrected;
     let base = "#1e293b";
-    if (hit === 2) base = "#f97316";
+    if (hit === 2) base = "#38bdf8";
     if (hit === 3) base = "#22c55e";
-    const shade = Math.max(0.15, 1 - corrected / 10);
-    ctx.fillStyle = shadeColor(base, shade);
-    ctx.fillRect(i, wallTop, 1, wallHeight);
+    if (hit === 4 || hit === 5) base = "#1e293b";
+    const shade = Math.max(0.2, 1 - corrected / 9);
+    if (wallTextureReady && hit !== 0) {
+      let wallX = side === 0
+        ? (state.y + corrected * rayDirY)
+        : (state.x + corrected * rayDirX);
+      wallX -= Math.floor(wallX);
+      if (side === 0 && rayDirX > 0) wallX = 1 - wallX;
+      if (side === 1 && rayDirY < 0) wallX = 1 - wallX;
+      const texX = Math.min(wallTexture.width - 1, Math.floor(wallX * wallTexture.width));
+      ctx.drawImage(wallTexture, texX, 0, 1, wallTexture.height, i, wallTop, 1, wallHeight);
+      ctx.globalAlpha = hit === 1 ? 0.25 : 0.45;
+      ctx.fillStyle = shadeColor(base, shade);
+      ctx.fillRect(i, wallTop, 1, wallHeight);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = shadeColor(base, shade);
+      ctx.fillRect(i, wallTop, 1, wallHeight);
+    }
   }
 
-  drawFloorGlow(w, h);
+  drawFloor(w, h);
+  drawTerminalSprites(w, h, depth, fov);
   drawTerminalsHint();
+  drawMiniMap();
+  drawVignette(w, h);
 }
 
-function drawFloorGlow(w,h){
-  const grad = ctx.createRadialGradient(w*0.5,h*0.8,10,w*0.5,h*0.8,h*0.7);
-  grad.addColorStop(0,"rgba(45,212,191,0.12)");
-  grad.addColorStop(1,"rgba(8,12,18,0)");
+function drawFloor(w,h){
+  const horizon = h * 0.5;
+  const grad = ctx.createLinearGradient(0, horizon, 0, h);
+  grad.addColorStop(0, "rgba(6,10,16,0)");
+  grad.addColorStop(1, "rgba(6,10,16,0.85)");
   ctx.fillStyle = grad;
+  ctx.fillRect(0, horizon, w, h - horizon);
+}
+
+function drawVignette(w,h){
+  const edge = ctx.createRadialGradient(w * 0.5, h * 0.55, h * 0.25, w * 0.5, h * 0.55, h * 0.8);
+  edge.addColorStop(0, "rgba(0,0,0,0)");
+  edge.addColorStop(1, "rgba(0,0,0,0.45)");
+  ctx.fillStyle = edge;
   ctx.fillRect(0,0,w,h);
+}
+
+function drawTerminalSprites(w, h, depth, fov){
+  terminals.forEach(term => {
+    if (term.solved) return;
+    const dx = term.x - state.x;
+    const dy = term.y - state.y;
+    const dist = Math.hypot(dx, dy);
+    const spriteDist = Math.max(dist - 0.6, 0.01);
+    const angle = normalizeAngle(Math.atan2(dy, dx) - state.angle);
+    if (Math.abs(angle) > fov / 2 + 0.25) return;
+    const screenX = (0.5 + angle / fov) * w;
+    let spriteH = Math.min(h * 0.26, (h / (spriteDist + 0.3)) * 0.35);
+    spriteH = Math.max(spriteH, h * 0.08);
+    let spriteW = spriteH * 0.6;
+    const maxW = h * 0.18;
+    if (spriteW > maxW) spriteW = maxW;
+    const xStart = Math.max(0, Math.floor(screenX - spriteW / 2));
+    const xEnd = Math.min(w - 1, Math.floor(screenX + spriteW / 2));
+    const yTop = Math.floor((h - spriteH) / 2 + spriteH * 0.18);
+    for (let x = xStart; x <= xEnd; x++) {
+      if (spriteDist <= depth[x] + 0.1) {
+        ctx.fillStyle = "rgba(12,18,30,0.95)";
+        ctx.fillRect(x, yTop, 1, spriteH);
+        if (x > xStart + spriteW * 0.18 && x < xEnd - spriteW * 0.18) {
+          ctx.fillStyle = "rgba(10,16,26,0.98)";
+          ctx.fillRect(x, yTop + spriteH * 0.16, 1, spriteH * 0.68);
+        }
+        if (x > xStart + spriteW * 0.28 && x < xEnd - spriteW * 0.28) {
+          ctx.fillStyle = "rgba(13,22,38,1)";
+          ctx.fillRect(x, yTop + spriteH * 0.26, 1, spriteH * 0.48);
+          ctx.fillStyle = "rgba(45,212,191,0.75)";
+          ctx.fillRect(x, yTop + spriteH * 0.32, 1, spriteH * 0.36);
+        }
+      }
+    }
+  });
+  terminals.forEach(term => {
+    if (!term.solved) return;
+    const dx = term.x - state.x;
+    const dy = term.y - state.y;
+    const dist = Math.hypot(dx, dy);
+    const spriteDist = Math.max(dist - 0.6, 0.01);
+    const angle = normalizeAngle(Math.atan2(dy, dx) - state.angle);
+    if (Math.abs(angle) > fov / 2 + 0.25) return;
+    const screenX = (0.5 + angle / fov) * w;
+    let spriteH = Math.min(h * 0.26, (h / (spriteDist + 0.3)) * 0.35);
+    spriteH = Math.max(spriteH, h * 0.08);
+    let spriteW = spriteH * 0.6;
+    const maxW = h * 0.18;
+    if (spriteW > maxW) spriteW = maxW;
+    const xStart = Math.max(0, Math.floor(screenX - spriteW / 2));
+    const xEnd = Math.min(w - 1, Math.floor(screenX + spriteW / 2));
+    const yTop = Math.floor((h - spriteH) / 2 + spriteH * 0.18);
+    for (let x = xStart; x <= xEnd; x++) {
+      if (spriteDist <= depth[x] + 0.1) {
+        ctx.fillStyle = "rgba(12,18,30,0.95)";
+        ctx.fillRect(x, yTop, 1, spriteH);
+        if (x > xStart + spriteW * 0.28 && x < xEnd - spriteW * 0.28) {
+          ctx.fillStyle = "rgba(13,22,38,1)";
+          ctx.fillRect(x, yTop + spriteH * 0.26, 1, spriteH * 0.48);
+          ctx.fillStyle = "rgba(34,197,94,0.8)";
+          ctx.fillRect(x, yTop + spriteH * 0.32, 1, spriteH * 0.36);
+        }
+      }
+    }
+  });
+}
+
+function normalizeAngle(angle){
+  if (angle < -Math.PI) return angle + Math.PI * 2;
+  if (angle > Math.PI) return angle - Math.PI * 2;
+  return angle;
+}
+
+function drawMiniMap(){
+  const w = minimap.width;
+  const h = minimap.height;
+  mapCtx.clearRect(0,0,w,h);
+  const rows = map.length;
+  const cols = map[0].length;
+  const cellW = w / cols;
+  const cellH = h / rows;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const tile = map[y][x];
+      if (tile === 0) {
+        mapCtx.fillStyle = "rgba(6,10,16,0.6)";
+      } else if (tile === 1) {
+        mapCtx.fillStyle = "#1f2937";
+      } else if (tile === 2) {
+        mapCtx.fillStyle = "#38bdf8";
+      } else if (tile === 3) {
+        mapCtx.fillStyle = "#22c55e";
+      } else if (tile === 4) {
+        mapCtx.fillStyle = "#0ea5a4";
+      } else if (tile === 5) {
+        mapCtx.fillStyle = "#22c55e";
+      }
+      mapCtx.fillRect(x * cellW, y * cellH, cellW, cellH);
+    }
+  }
+  const px = state.x * cellW;
+  const py = state.y * cellH;
+  mapCtx.fillStyle = "#22c55e";
+  mapCtx.beginPath();
+  const angle = state.angle;
+  const r = Math.min(cellW, cellH) * 0.4;
+  mapCtx.moveTo(px + Math.cos(angle) * r, py + Math.sin(angle) * r);
+  mapCtx.lineTo(px + Math.cos(angle + 2.4) * r, py + Math.sin(angle + 2.4) * r);
+  mapCtx.lineTo(px + Math.cos(angle - 2.4) * r, py + Math.sin(angle - 2.4) * r);
+  mapCtx.closePath();
+  mapCtx.fill();
 }
 
 function drawTerminalsHint(){
   const term = nearestTerminal();
   if (!term || !state.running) return;
   const dist = distance(state.x, state.y, term.x, term.y);
-  if (dist < 1.2) {
+  if (dist < state.interactionRange) {
     hintChip.textContent = "Terminal in range. Press E.";
   } else if (state.shards < 3) {
     hintChip.textContent = "Find a glowing terminal";
@@ -638,8 +1010,9 @@ function update(){
   if (state.keys["a"]) { nextX -= rightX * state.moveSpeed; nextY -= rightY * state.moveSpeed; }
   if (state.keys["d"]) { nextX += rightX * state.moveSpeed; nextY += rightY * state.moveSpeed; }
 
-  if (!isWall(nextX, state.y)) state.x = nextX;
-  if (!isWall(state.x, nextY)) state.y = nextY;
+  if (!isBlocked(nextX, state.y)) state.x = nextX;
+  if (!isBlocked(state.x, nextY)) state.y = nextY;
+  alignToCorridor();
 
   state.timer += 1/60;
   updateHud();
@@ -659,10 +1032,25 @@ function checkExit(){
 
 window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
+  if (!state.running && key !== "tab") {
+    startRun();
+  }
+  if (state.running && !state.paused && document.pointerLockElement !== canvas) {
+    if (["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(key)) {
+      canvas.requestPointerLock();
+    }
+  }
   state.keys[key] = true;
   if (key === "e" && state.running && !state.activeTerminal) {
     const term = nearestTerminal();
-    if (term) openTerminal(term);
+    if (term) {
+      openTerminal(term);
+    } else {
+      hintChip.textContent = "No terminal in range";
+    }
+  }
+  if (state.running && (key === "arrowup" || key === "arrowdown" || key === "arrowleft" || key === "arrowright")) {
+    e.preventDefault();
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -671,6 +1059,19 @@ window.addEventListener("keyup", (e) => {
 
 startBtn.addEventListener("click", startRun);
 resetBtn.addEventListener("click", resetRun);
+
+canvas.addEventListener("click", () => {
+  if (!state.running) startRun();
+  if (document.pointerLockElement !== canvas) {
+    canvas.requestPointerLock();
+  }
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement === canvas && state.running && !state.paused && !state.win) {
+    state.angle += e.movementX * state.mouseSensitivity;
+  }
+});
 
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();

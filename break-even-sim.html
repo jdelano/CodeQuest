@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Break-Even Simulator</title>
+    <style>
+      :root {
+        --ink: #1a1a1a;
+        --muted: #5a5a5a;
+        --bg: #f3efe8;
+        --card: #fff8ee;
+        --accent: #1f6d4e;
+        --accent-2: #b85c2b;
+        --grid: rgba(0, 0, 0, 0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 20% 20%, rgba(31, 109, 78, 0.08), transparent 45%),
+          radial-gradient(circle at 80% 10%, rgba(184, 92, 43, 0.08), transparent 40%),
+          var(--bg);
+      }
+      .wrap {
+        max-width: 1050px;
+        margin: 0 auto;
+        padding: 28px 20px 40px;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(26px, 4vw, 40px);
+        letter-spacing: 0.5px;
+      }
+      .sub {
+        color: var(--muted);
+        font-family: "Verdana", "Tahoma", sans-serif;
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 340px) 1fr;
+        gap: 18px;
+        margin-top: 18px;
+      }
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+      }
+      .card h2 {
+        margin: 0 0 10px 0;
+        font-size: 18px;
+        font-family: "Verdana", "Tahoma", sans-serif;
+      }
+      .control {
+        margin-bottom: 12px;
+      }
+      .control label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        font-family: "Verdana", "Tahoma", sans-serif;
+        color: var(--muted);
+      }
+      .control input[type="range"] {
+        width: 100%;
+      }
+      .control input[type="number"] {
+        width: 100%;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        background: #fffdf8;
+        font-size: 14px;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      @media (max-width: 540px) {
+        .summary {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stat {
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fffdf8;
+      }
+      .stat .label {
+        font-size: 12px;
+        color: var(--muted);
+        font-family: "Verdana", "Tahoma", sans-serif;
+      }
+      .stat .value {
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      canvas {
+        width: 100%;
+        height: 420px;
+        display: block;
+        border-radius: 14px;
+        background: #fffdf8;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 10px;
+        font-family: "Verdana", "Tahoma", sans-serif;
+      }
+      .pill {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(31, 109, 78, 0.12);
+        color: var(--accent);
+        font-size: 12px;
+        font-family: "Verdana", "Tahoma", sans-serif;
+        margin-left: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Break-Even Simulator</h1>
+        <div class="sub">Single-product CVP model with instant feedback</div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Inputs</h2>
+
+          <div class="control">
+            <label>
+              Fixed Costs ($)
+              <span id="fixedLabel"></span>
+            </label>
+            <input id="fixed" type="range" min="1000" max="50000" step="500" value="12000" />
+          </div>
+
+          <div class="control">
+            <label>
+              Selling Price per Unit ($)
+              <span id="priceLabel"></span>
+            </label>
+            <input id="price" type="range" min="5" max="100" step="1" value="30" />
+          </div>
+
+          <div class="control">
+            <label>
+              Variable Cost per Unit ($)
+              <span id="varLabel"></span>
+            </label>
+            <input id="variable" type="range" min="1" max="80" step="1" value="12" />
+          </div>
+
+          <div class="control">
+            <label>
+              Planned Sales Volume (units)
+              <span id="salesLabel"></span>
+            </label>
+            <input id="sales" type="range" min="0" max="5000" step="50" value="1000" />
+          </div>
+
+          <div class="control">
+            <label for="maxUnits">Chart Max Units</label>
+            <input id="maxUnits" type="number" min="500" max="20000" step="100" value="5000" />
+          </div>
+
+          <div class="summary" aria-live="polite">
+            <div class="stat">
+              <div class="label">Contribution Margin / Unit</div>
+              <div class="value" id="cmu"></div>
+            </div>
+            <div class="stat">
+              <div class="label">Break-Even (Units)</div>
+              <div class="value" id="beUnits"></div>
+            </div>
+            <div class="stat">
+              <div class="label">Break-Even (Revenue)</div>
+              <div class="value" id="beRev"></div>
+            </div>
+            <div class="stat">
+              <div class="label">Profit at Planned Volume</div>
+              <div class="value" id="profit"></div>
+            </div>
+          </div>
+
+          <div class="note">
+            Tip: raise price or lower variable cost to reduce break-even units.
+            <span class="pill" id="status"></span>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Cost-Volume-Profit Chart</h2>
+          <canvas id="chart" width="900" height="420"></canvas>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const fixed = $("fixed");
+      const price = $("price");
+      const variable = $("variable");
+      const sales = $("sales");
+      const maxUnits = $("maxUnits");
+
+      const fixedLabel = $("fixedLabel");
+      const priceLabel = $("priceLabel");
+      const varLabel = $("varLabel");
+      const salesLabel = $("salesLabel");
+
+      const cmuEl = $("cmu");
+      const beUnitsEl = $("beUnits");
+      const beRevEl = $("beRev");
+      const profitEl = $("profit");
+      const statusEl = $("status");
+
+      const canvas = $("chart");
+      const ctx = canvas.getContext("2d");
+
+      const fmt = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      });
+
+      function draw() {
+        const f = Number(fixed.value);
+        const p = Number(price.value);
+        const v = Number(variable.value);
+        const s = Number(sales.value);
+        const maxU = Math.max(Number(maxUnits.value || 0), 500);
+
+        fixedLabel.textContent = fmt.format(f);
+        priceLabel.textContent = fmt.format(p);
+        varLabel.textContent = fmt.format(v);
+        salesLabel.textContent = `${s.toLocaleString()} units`;
+
+        const cmu = p - v;
+        const beUnits = cmu > 0 ? f / cmu : Infinity;
+        const beRev = beUnits * p;
+        const profit = (p - v) * s - f;
+
+        cmuEl.textContent = cmu > 0 ? fmt.format(cmu) : "—";
+        beUnitsEl.textContent = Number.isFinite(beUnits) ? Math.ceil(beUnits).toLocaleString() : "N/A";
+        beRevEl.textContent = Number.isFinite(beRev) ? fmt.format(beRev) : "N/A";
+        profitEl.textContent = fmt.format(profit);
+
+        if (cmu <= 0) {
+          statusEl.textContent = "No break-even";
+          statusEl.style.background = "rgba(184, 92, 43, 0.18)";
+          statusEl.style.color = "#8a3e19";
+        } else if (profit >= 0) {
+          statusEl.textContent = "Profitable";
+          statusEl.style.background = "rgba(31, 109, 78, 0.16)";
+          statusEl.style.color = "#1f6d4e";
+        } else {
+          statusEl.textContent = "Below break-even";
+          statusEl.style.background = "rgba(184, 92, 43, 0.18)";
+          statusEl.style.color = "#8a3e19";
+        }
+
+        drawChart(f, p, v, s, maxU, beUnits);
+      }
+
+      function drawChart(fixedCost, pricePer, varPer, plannedUnits, maxUnits, beUnits) {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const maxRevenue = pricePer * maxUnits;
+        const maxCost = fixedCost + varPer * maxUnits;
+        const yMax = Math.max(maxRevenue, maxCost, fixedCost * 1.2);
+
+        const padding = { left: 60, right: 20, top: 20, bottom: 50 };
+        const plotW = w - padding.left - padding.right;
+        const plotH = h - padding.top - padding.bottom;
+
+        const x = (u) => padding.left + (u / maxUnits) * plotW;
+        const y = (val) => padding.top + (1 - val / yMax) * plotH;
+
+        // grid
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--grid");
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 5; i++) {
+          const yy = padding.top + (plotH / 5) * i;
+          ctx.beginPath();
+          ctx.moveTo(padding.left, yy);
+          ctx.lineTo(w - padding.right, yy);
+          ctx.stroke();
+        }
+
+        // axes
+        ctx.strokeStyle = "#2b2b2b";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top);
+        ctx.lineTo(padding.left, h - padding.bottom);
+        ctx.lineTo(w - padding.right, h - padding.bottom);
+        ctx.stroke();
+
+        // revenue line
+        ctx.strokeStyle = "#1f6d4e";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(x(0), y(0));
+        ctx.lineTo(x(maxUnits), y(pricePer * maxUnits));
+        ctx.stroke();
+
+        // total cost line
+        ctx.strokeStyle = "#b85c2b";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(x(0), y(fixedCost));
+        ctx.lineTo(x(maxUnits), y(fixedCost + varPer * maxUnits));
+        ctx.stroke();
+
+        // planned volume line
+        ctx.strokeStyle = "#333";
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(x(plannedUnits), y(0));
+        ctx.lineTo(x(plannedUnits), y(pricePer * plannedUnits));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // break-even point
+        if (Number.isFinite(beUnits)) {
+          const beX = x(beUnits);
+          const beY = y(pricePer * beUnits);
+          ctx.fillStyle = "#1a1a1a";
+          ctx.beginPath();
+          ctx.arc(beX, beY, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = "12px Verdana";
+          ctx.fillText("Break-even", beX + 8, beY - 8);
+        }
+
+        // labels
+        ctx.fillStyle = "#1a1a1a";
+        ctx.font = "12px Verdana";
+        ctx.fillText("Revenue", x(maxUnits) - 70, y(pricePer * maxUnits) - 8);
+        ctx.fillText("Total Cost", x(maxUnits) - 78, y(fixedCost + varPer * maxUnits) + 14);
+        ctx.fillText("Units", w - 50, h - 18);
+        ctx.save();
+        ctx.translate(16, h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText("Dollars ($)", 0, 0);
+        ctx.restore();
+
+        // y-axis ticks
+        for (let i = 0; i <= 5; i++) {
+          const val = (yMax / 5) * (5 - i);
+          const yy = padding.top + (plotH / 5) * i;
+          ctx.fillText(fmt.format(val), 6, yy + 4);
+        }
+      }
+
+      [fixed, price, variable, sales, maxUnits].forEach((el) =>
+        el.addEventListener("input", draw),
+      );
+      draw();
+    </script>
+  </body>
+</html>

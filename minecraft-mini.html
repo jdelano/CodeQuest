@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Minecraft Mini</title>
+<style>
+:root{
+  --bg1:#0b1220;
+  --bg2:#08111b;
+  --panel:#0e1726;
+  --line:#1f2b3f;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --accent:#f59e0b;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  background:radial-gradient(circle at 20% 10%, #182235 0%, var(--bg1) 45%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:"Trebuchet MS","Gill Sans",Tahoma,sans-serif;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.frame{
+  width:min(1200px, 96vw);
+  height:min(780px, 92vh);
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:linear-gradient(180deg, rgba(14,23,38,0.65), rgba(7,12,20,0.8));
+  box-shadow:0 30px 90px rgba(2,6,23,0.6);
+  overflow:hidden;
+  position:relative;
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+.hud{
+  position:absolute;
+  left:16px;
+  top:16px;
+  right:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  pointer-events:none;
+}
+.panel{
+  background:rgba(12,19,31,0.7);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:12px;
+  color:var(--muted);
+  max-width:380px;
+}
+.title{
+  font-size:16px;
+  font-weight:800;
+  color:var(--accent);
+  margin-bottom:6px;
+}
+.inventory{
+  display:flex;
+  gap:8px;
+  margin-top:6px;
+}
+.slot{
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:rgba(8,13,22,0.8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  font-weight:700;
+  color:var(--text);
+}
+.slot.active{
+  outline:2px solid var(--accent);
+  color:var(--accent);
+}
+.footer{
+  position:absolute;
+  left:16px;
+  bottom:16px;
+  font-size:12px;
+  color:var(--muted);
+  background:rgba(12,19,31,0.7);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:6px 10px;
+}
+</style>
+</head>
+<body>
+<div class="frame">
+  <canvas id="world" width="1200" height="780" aria-label="Minecraft Mini"></canvas>
+  <div class="hud">
+    <div class="panel">
+      <div class="title">Minecraft Mini</div>
+      <div>Click to lock pointer · WASD to move · Mouse to look</div>
+      <div>Left click: mine · Right click: place · 1-4 select block</div>
+      <div>Space: jump · Shift: crouch · R: regenerate</div>
+      <div class="inventory" id="inv">
+        <div class="slot active" data-id="1">1</div>
+        <div class="slot" data-id="2">2</div>
+        <div class="slot" data-id="3">3</div>
+        <div class="slot" data-id="4">4</div>
+      </div>
+    </div>
+    <div class="panel" id="info">Blocks: 0</div>
+  </div>
+  <div class="footer">Mine blocks to sculpt terrain. Right click to place the selected block.</div>
+</div>
+
+<script>
+const canvas = document.getElementById("world");
+const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
+const inv = document.getElementById("inv");
+
+const WORLD_W = 32;
+const WORLD_D = 32;
+const WORLD_H = 16;
+const FOV = Math.PI / 3;
+const MAX_DIST = 28;
+const GRAVITY = -0.015;
+const MOVE_SPEED = 0.09;
+const TURN_SPEED = 0.0022;
+const PLAYER_HEIGHT = 1.8;
+const EYE_HEIGHT = 1.6;
+const PLAYER_RADIUS = 0.25;
+
+const blocks = {
+  1: {name:"Grass", top:"#5fbf6f", side:"#4a9358"},
+  2: {name:"Dirt", top:"#9c6b41", side:"#7d5633"},
+  3: {name:"Stone", top:"#8f97a6", side:"#6f7682"},
+  4: {name:"Wood", top:"#c69257", side:"#9f7042"}
+};
+
+let world = [];
+let selected = 1;
+let keys = {};
+let pointerLocked = false;
+let blockCount = 0;
+
+const player = {
+  x: 10.5,
+  y: 6,
+  z: 10.5,
+  yaw: 0,
+  pitch: 0,
+  vy: 0,
+  onGround: false
+};
+
+function resize(){
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * devicePixelRatio);
+  canvas.height = Math.floor(rect.height * devicePixelRatio);
+}
+
+function generateWorld(){
+  world = Array.from({length: WORLD_W}, () =>
+    Array.from({length: WORLD_H}, () => Array(WORLD_D).fill(0))
+  );
+  blockCount = 0;
+  for (let x = 0; x < WORLD_W; x++) {
+    for (let z = 0; z < WORLD_D; z++) {
+      const height = 4 + Math.floor(
+        Math.sin(x * 0.35) * 2.2 +
+        Math.cos(z * 0.3) * 2.2 +
+        Math.random() * 1.6
+      );
+      const h = Math.max(2, Math.min(WORLD_H - 2, height));
+      for (let y = 0; y < h; y++) {
+        world[x][y][z] = y === h - 1 ? 1 : (y < 2 ? 3 : 2);
+        blockCount++;
+      }
+    }
+  }
+  info.textContent = `Blocks: ${blockCount}`;
+  player.x = 10.5;
+  player.z = 10.5;
+  player.y = getGroundY(player.x, player.z) + EYE_HEIGHT;
+  player.vy = 0;
+}
+
+function getBlock(x, y, z){
+  if (x < 0 || y < 0 || z < 0 || x >= WORLD_W || y >= WORLD_H || z >= WORLD_D) return 0;
+  return world[x][y][z];
+}
+
+function setBlock(x, y, z, type){
+  if (x < 0 || y < 0 || z < 0 || x >= WORLD_W || y >= WORLD_H || z >= WORLD_D) return false;
+  const prev = world[x][y][z];
+  world[x][y][z] = type;
+  if (prev === 0 && type !== 0) blockCount++;
+  if (prev !== 0 && type === 0) blockCount--;
+  info.textContent = `Blocks: ${blockCount}`;
+  return true;
+}
+
+function getGroundY(x, z){
+  const gx = Math.floor(x);
+  const gz = Math.floor(z);
+  for (let y = WORLD_H - 1; y >= 0; y--) {
+    if (getBlock(gx, y, gz) !== 0) return y + 1;
+  }
+  return 0;
+}
+
+function render(){
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+
+  const sky = ctx.createLinearGradient(0,0,0,h);
+  sky.addColorStop(0,"#0d1628");
+  sky.addColorStop(1,"#05070c");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,w,h);
+
+  const ground = ctx.createLinearGradient(0,h*0.5,0,h);
+  ground.addColorStop(0,"rgba(9,13,20,0)");
+  ground.addColorStop(1,"rgba(6,10,16,0.95)");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0,h*0.5,w,h*0.5);
+
+  const projPlane = (w / 2) / Math.tan(FOV / 2);
+  const pitchOffset = Math.tan(player.pitch) * projPlane;
+  const dirX = Math.cos(player.yaw);
+  const dirZ = Math.sin(player.yaw);
+  const planeX = -dirZ * Math.tan(FOV / 2);
+  const planeZ = dirX * Math.tan(FOV / 2);
+
+  for (let i = 0; i < w; i++) {
+    const cameraX = (2 * i / w) - 1;
+    const rayDirX = dirX + planeX * cameraX;
+    const rayDirZ = dirZ + planeZ * cameraX;
+    const rayDirY = Math.sin(player.pitch);
+
+    const hit = raycast3D(rayDirX, rayDirY, rayDirZ, MAX_DIST);
+    if (!hit) continue;
+    const {x, y, z, dist, side} = hit;
+    const block = blocks[getBlock(x, y, z)] || blocks[2];
+    const topScreen = (h / 2 + pitchOffset) - ((y + 1 - player.y) / dist) * projPlane;
+    const botScreen = (h / 2 + pitchOffset) - ((y - player.y) / dist) * projPlane;
+    const sliceH = botScreen - topScreen;
+    const shade = side === 1 ? 1 : side === 2 ? 0.75 : 0.85;
+    const color = side === 1 ? block.top : block.side;
+    ctx.fillStyle = shadeColor(color, shade);
+    ctx.fillRect(i, topScreen, 1, sliceH);
+  }
+
+  drawCrosshair();
+}
+
+function shadeColor(hex, shade){
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.floor(((num >> 16) & 255) * shade));
+  const g = Math.min(255, Math.floor(((num >> 8) & 255) * shade));
+  const b = Math.min(255, Math.floor((num & 255) * shade));
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawCrosshair(){
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.strokeStyle = "rgba(245,158,11,0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(w/2, h/2, 8, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function raycast3D(dirX, dirY, dirZ, maxDist){
+  let mapX = Math.floor(player.x);
+  let mapY = Math.floor(player.y);
+  let mapZ = Math.floor(player.z);
+  const deltaDistX = Math.abs(1 / (dirX === 0 ? 0.0001 : dirX));
+  const deltaDistY = Math.abs(1 / (dirY === 0 ? 0.0001 : dirY));
+  const deltaDistZ = Math.abs(1 / (dirZ === 0 ? 0.0001 : dirZ));
+  let stepX = 0;
+  let stepY = 0;
+  let stepZ = 0;
+  let sideDistX = 0;
+  let sideDistY = 0;
+  let sideDistZ = 0;
+  if (dirX < 0) {
+    stepX = -1;
+    sideDistX = (player.x - mapX) * deltaDistX;
+  } else {
+    stepX = 1;
+    sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
+  }
+  if (dirY < 0) {
+    stepY = -1;
+    sideDistY = (player.y - mapY) * deltaDistY;
+  } else {
+    stepY = 1;
+    sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
+  }
+  if (dirZ < 0) {
+    stepZ = -1;
+    sideDistZ = (player.z - mapZ) * deltaDistZ;
+  } else {
+    stepZ = 1;
+    sideDistZ = (mapZ + 1.0 - player.z) * deltaDistZ;
+  }
+  for (let step = 0; step < 120; step++) {
+    let side = 0;
+    if (sideDistX < sideDistY && sideDistX < sideDistZ) {
+      sideDistX += deltaDistX;
+      mapX += stepX;
+      side = 0;
+    } else if (sideDistY < sideDistZ) {
+      sideDistY += deltaDistY;
+      mapY += stepY;
+      side = 1;
+    } else {
+      sideDistZ += deltaDistZ;
+      mapZ += stepZ;
+      side = 2;
+    }
+    if (mapX < 0 || mapY < 0 || mapZ < 0 || mapX >= WORLD_W || mapY >= WORLD_H || mapZ >= WORLD_D) {
+      return null;
+    }
+    if (getBlock(mapX, mapY, mapZ) !== 0) {
+      const dist = side === 0
+        ? (mapX - player.x + (1 - stepX) / 2) / (dirX === 0 ? 0.0001 : dirX)
+        : side === 1
+          ? (mapY - player.y + (1 - stepY) / 2) / (dirY === 0 ? 0.0001 : dirY)
+          : (mapZ - player.z + (1 - stepZ) / 2) / (dirZ === 0 ? 0.0001 : dirZ);
+      if (dist > maxDist) return null;
+      return {x: mapX, y: mapY, z: mapZ, side, dist, stepX, stepY, stepZ};
+    }
+  }
+  return null;
+}
+
+function updatePhysics(){
+  const forwardX = Math.cos(player.yaw);
+  const forwardZ = Math.sin(player.yaw);
+  const rightX = Math.cos(player.yaw + Math.PI/2);
+  const rightZ = Math.sin(player.yaw + Math.PI/2);
+  let moveX = 0;
+  let moveZ = 0;
+  if (keys["w"]) { moveX += forwardX; moveZ += forwardZ; }
+  if (keys["s"]) { moveX -= forwardX; moveZ -= forwardZ; }
+  if (keys["a"]) { moveX -= rightX; moveZ -= rightZ; }
+  if (keys["d"]) { moveX += rightX; moveZ += rightZ; }
+  const mag = Math.hypot(moveX, moveZ) || 1;
+  moveX = (moveX / mag) * MOVE_SPEED;
+  moveZ = (moveZ / mag) * MOVE_SPEED;
+  tryMove(player.x + moveX, player.z + moveZ);
+
+  player.vy += GRAVITY;
+  player.y += player.vy;
+  const ground = getGroundY(player.x, player.z);
+  if (player.y < ground + EYE_HEIGHT) {
+    player.y = ground + EYE_HEIGHT;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+}
+
+function collidesAt(x, y, z){
+  const minY = y - EYE_HEIGHT;
+  const maxY = minY + PLAYER_HEIGHT;
+  for (let ox of [-PLAYER_RADIUS, PLAYER_RADIUS]) {
+    for (let oz of [-PLAYER_RADIUS, PLAYER_RADIUS]) {
+      for (let oy of [0, PLAYER_HEIGHT * 0.5, PLAYER_HEIGHT - 0.05]) {
+        const bx = Math.floor(x + ox);
+        const by = Math.floor(minY + oy);
+        const bz = Math.floor(z + oz);
+        if (getBlock(bx, by, bz) !== 0) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function tryMove(nx, nz){
+  if (collidesAt(nx, player.y, nz)) return;
+  player.x = nx;
+  player.z = nz;
+}
+
+function mineBlock(){
+  const dirX = Math.cos(player.yaw);
+  const dirZ = Math.sin(player.yaw);
+  const dirY = Math.sin(player.pitch);
+  const hit = raycast3D(dirX, dirY, dirZ, 6);
+  if (!hit) return;
+  setBlock(hit.x, hit.y, hit.z, 0);
+}
+
+function placeBlock(){
+  const dirX = Math.cos(player.yaw);
+  const dirZ = Math.sin(player.yaw);
+  const dirY = Math.sin(player.pitch);
+  const hit = raycast3D(dirX, dirY, dirZ, 6);
+  if (!hit) return;
+  let px = hit.x;
+  let py = hit.y;
+  let pz = hit.z;
+  if (hit.side === 0) px -= hit.stepX;
+  if (hit.side === 1) py -= hit.stepY;
+  if (hit.side === 2) pz -= hit.stepZ;
+  setBlock(px, py, pz, selected);
+}
+
+function update(){
+  updatePhysics();
+  render();
+  requestAnimationFrame(update);
+}
+
+canvas.addEventListener("click", () => {
+  if (!pointerLocked) canvas.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange", () => {
+  pointerLocked = document.pointerLockElement === canvas;
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (!pointerLocked) return;
+  player.yaw += e.movementX * TURN_SPEED;
+  player.pitch -= e.movementY * TURN_SPEED;
+  const limit = 0.8;
+  player.pitch = Math.max(-limit, Math.min(limit, player.pitch));
+});
+
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("mousedown", (e) => {
+  if (!pointerLocked) return;
+  if (e.button === 0) mineBlock();
+  if (e.button === 2) placeBlock();
+});
+
+window.addEventListener("keydown", (e) => {
+  const key = e.key.toLowerCase();
+  keys[key] = true;
+  if (key === "1" || key === "2" || key === "3" || key === "4") {
+    selected = Number(key);
+    document.querySelectorAll(".slot").forEach(slot => {
+      slot.classList.toggle("active", Number(slot.dataset.id) === selected);
+    });
+  }
+  if (key === "r") generateWorld();
+  if (key === " " && player.onGround) {
+    player.vy = 0.22;
+  }
+});
+window.addEventListener("keyup", (e) => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+inv.addEventListener("click", (e) => {
+  const slot = e.target.closest(".slot");
+  if (!slot) return;
+  selected = Number(slot.dataset.id);
+  document.querySelectorAll(".slot").forEach(el => {
+    el.classList.toggle("active", Number(el.dataset.id) === selected);
+  });
+});
+
+window.addEventListener("resize", resize);
+resize();
+generateWorld();
+update();
+</script>
+</body>
+</html>

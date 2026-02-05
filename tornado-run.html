@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tornado Run</title>
+<style>
+:root{
+  --bg:#0b0f17;
+  --bg2:#0f1624;
+  --line:#23324a;
+  --panel:#0f1a2a;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --accent:#f59e0b;
+  --accent2:#22c55e;
+  --danger:#f87171;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(245,158,11,0.18), transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(248,113,113,0.18), transparent 45%),
+    linear-gradient(180deg, var(--bg), #070b10);
+  font-family:"Trebuchet MS","Gill Sans","Segoe UI",Tahoma,sans-serif;
+  color:var(--text);
+}
+.frame{
+  width:min(1200px, 96vw);
+  height:min(760px, 92vh);
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:linear-gradient(180deg, rgba(12,18,28,0.7), rgba(6,9,14,0.9));
+  box-shadow:0 30px 80px rgba(2,6,23,0.6);
+  overflow:hidden;
+  position:relative;
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+.hud{
+  position:absolute;
+  left:16px;
+  top:16px;
+  right:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  pointer-events:none;
+}
+.panel{
+  background:rgba(12,19,31,0.7);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:12px;
+  color:var(--muted);
+}
+.title{
+  font-size:18px;
+  font-weight:800;
+  color:var(--accent);
+  margin-bottom:4px;
+  letter-spacing:0.6px;
+}
+.stats{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.bar{
+  width:160px;
+  height:10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  overflow:hidden;
+  background:rgba(8,12,18,0.8);
+}
+.barFill{
+  height:100%;
+  width:100%;
+  background:linear-gradient(90deg, var(--accent2), #16a34a);
+  transition:width .2s ease;
+}
+.barFill.danger{
+  background:linear-gradient(90deg, var(--danger), #fb7185);
+}
+.rightInfo{
+  text-align:right;
+  font-size:12px;
+}
+.footer{
+  position:absolute;
+  left:16px;
+  bottom:16px;
+  right:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  pointer-events:none;
+  font-size:12px;
+  color:var(--muted);
+}
+.overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(2,6,23,0.7);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+}
+.overlay.show{
+  opacity:1;
+  pointer-events:auto;
+}
+.modal{
+  width:min(640px, 92vw);
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:16px;
+  box-shadow:0 30px 80px rgba(2,6,23,0.7);
+}
+.modal h2{
+  margin:0 0 8px;
+  font-size:20px;
+  color:var(--accent);
+  font-family:"Impact","Haettenschweiler","Arial Black",sans-serif;
+  letter-spacing:0.6px;
+}
+.code{
+  background:#0b1220;
+  border:1px solid #23324a;
+  border-radius:10px;
+  padding:10px;
+  font-family:"SFMono-Regular",Menlo,Consolas,monospace;
+  font-size:13px;
+  color:#e2e8f0;
+  white-space:pre-wrap;
+}
+.answers{
+  display:grid;
+  gap:8px;
+  margin-top:12px;
+}
+.answer{
+  background:#0d1525;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  color:var(--text);
+  cursor:pointer;
+  text-align:left;
+}
+.answer:hover{border-color:var(--accent)}
+.answer.correct{border-color:rgba(34,197,94,0.7);background:rgba(34,197,94,0.1)}
+.answer.wrong{border-color:rgba(248,113,113,0.7);background:rgba(248,113,113,0.1)}
+.status{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:8px;
+}
+</style>
+</head>
+<body>
+<div class="frame">
+  <canvas id="game" width="1200" height="760" aria-label="Tornado Run"></canvas>
+  <div class="hud">
+    <div class="panel">
+      <div class="title">Tornado Run</div>
+      <div>Move: A/D · Dodge obstacles · Answer coding questions to avoid debris.</div>
+    </div>
+    <div class="panel rightInfo">
+      <div>Health</div>
+      <div class="bar"><div id="healthFill" class="barFill"></div></div>
+      <div style="margin-top:6px">Tornado Distance: <strong id="distanceText">100</strong></div>
+    </div>
+  </div>
+  <div class="footer">
+    <div>Debris risk increases as the tornado closes in.</div>
+    <div>Tip: Stay centered for easier dodges.</div>
+  </div>
+  <div class="overlay show" id="startOverlay">
+    <div class="modal">
+      <h2>Run Briefing</h2>
+      <div class="status">Stay ahead of the tornado. If debris targets you, answer the quiz to avoid damage.</div>
+      <div class="status">Press Space to start.</div>
+    </div>
+  </div>
+  <div class="overlay" id="quizOverlay">
+    <div class="modal">
+      <h2>Debris Incoming</h2>
+      <div id="quizPrompt" class="status"></div>
+      <div id="quizCode" class="code"></div>
+      <div id="quizAnswers" class="answers"></div>
+      <div id="quizStatus" class="status">Choose the correct answer to dodge.</div>
+    </div>
+  </div>
+  <div class="overlay" id="gameOver">
+    <div class="modal">
+      <h2>Swallowed by the Storm</h2>
+      <div class="status">The tornado caught you. Press R to restart.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const healthFill = document.getElementById("healthFill");
+const distanceText = document.getElementById("distanceText");
+const startOverlay = document.getElementById("startOverlay");
+const quizOverlay = document.getElementById("quizOverlay");
+const quizPrompt = document.getElementById("quizPrompt");
+const quizCode = document.getElementById("quizCode");
+const quizAnswers = document.getElementById("quizAnswers");
+const quizStatus = document.getElementById("quizStatus");
+const gameOver = document.getElementById("gameOver");
+
+const laneWidth = 160;
+const laneOffsets = [-laneWidth / 2, laneWidth / 2];
+const roadWidth = laneWidth * laneOffsets.length;
+const shoulderWidth = 28;
+const baseSpeed = 0.06;
+
+const questions = [
+  {
+    prompt:"What does this C# snippet print?",
+    code:"int total = 0;\nfor (int i = 1; i <= 3; i++) {\n  total += i;\n}\nConsole.WriteLine(total);",
+    options:["3","6","9","12"],
+    answer:1
+  },
+  {
+    prompt:"Fix the null reference issue.",
+    code:"string name = null;\nif (name.Length > 0) {\n  Console.WriteLine(name);\n}",
+    options:[
+      "Check name != null before name.Length",
+      "Use name.Count() instead of Length",
+      "Assign name = \"\"",
+      "Remove the if statement"
+    ],
+    answer:0
+  },
+  {
+    prompt:"Which expression returns true only for even numbers?",
+    code:"bool IsEven(int n) {\n  return ____;\n}",
+    options:["n / 2 == 0","n % 2 == 0","n % 2 != 0","n * 2 == 0"],
+    answer:1
+  },
+  {
+    prompt:"Choose the correct output.",
+    code:"int x = 5;\nint y = x++;\nConsole.WriteLine($\"{x},{y}\");",
+    options:["5,5","6,5","5,6","6,6"],
+    answer:1
+  }
+];
+
+const state = {
+  running:false,
+  paused:true,
+  health:100,
+  tornadoDist:100,
+  speed:baseSpeed,
+  laneIndex:0,
+  playerX:0,
+  scroll:0,
+  obstacles:[],
+  debrisTimer:3,
+  debrisActive:false,
+  debrisVisuals:[],
+  debrisSpawn:0.6
+};
+
+function resize(){
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * devicePixelRatio);
+  canvas.height = Math.floor(rect.height * devicePixelRatio);
+}
+
+function resetGame(){
+  state.running = false;
+  state.paused = true;
+  state.health = 100;
+  state.tornadoDist = 100;
+  state.speed = baseSpeed;
+  state.laneIndex = 0;
+  state.playerX = laneOffsets[state.laneIndex];
+  state.scroll = 0;
+  state.obstacles = [];
+  state.debrisTimer = 3;
+  state.debrisActive = false;
+  state.debrisVisuals = [];
+  state.debrisSpawn = 0.6;
+  updateHud();
+  startOverlay.classList.add("show");
+  quizOverlay.classList.remove("show");
+  gameOver.classList.remove("show");
+}
+
+function updateHud(){
+  healthFill.style.width = `${state.health}%`;
+  healthFill.classList.toggle("danger", state.health < 35);
+  distanceText.textContent = Math.floor(state.tornadoDist);
+}
+
+function spawnObstacle(){
+  const lane = Math.floor(Math.random() * laneOffsets.length);
+  const types = ["rock","log","car","water"];
+  const type = types[Math.floor(Math.random() * types.length)];
+  state.obstacles.push({lane, z:1.2, type});
+}
+
+function drawBackground(w,h){
+  ctx.fillStyle = "#7cc4ff";
+  ctx.fillRect(0,0,w,h);
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,"rgba(120,200,255,0.15)");
+  grad.addColorStop(1,"rgba(12,22,10,0.85)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = "#1f6b2f";
+  ctx.fillRect(0, h * 0.2, w, h * 0.8);
+}
+
+function drawRoad(w,h){
+  const centerX = w/2;
+  ctx.fillStyle = "#303848";
+  ctx.fillRect(centerX - roadWidth/2 - shoulderWidth, 0, roadWidth + shoulderWidth * 2, h);
+  ctx.fillStyle = "#111827";
+  ctx.fillRect(centerX - roadWidth/2, 0, roadWidth, h);
+  ctx.strokeStyle = "rgba(241,245,249,0.85)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(centerX - roadWidth/2 + 6, 0);
+  ctx.lineTo(centerX - roadWidth/2 + 6, h);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX + roadWidth/2 - 6, 0);
+  ctx.lineTo(centerX + roadWidth/2 - 6, h);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(245,158,11,0.9)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 6, 0);
+  ctx.lineTo(centerX - 6, h);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX + 6, 0);
+  ctx.lineTo(centerX + 6, h);
+  ctx.stroke();
+}
+
+function drawPlayer(w,h){
+  const centerX = w/2 + state.playerX;
+  const y = h * 0.78;
+  const runPhase = (performance.now() * 0.008) % (Math.PI * 2);
+  const legSwing = Math.sin(runPhase) * 6;
+  const armSwing = Math.cos(runPhase) * 5;
+  ctx.fillStyle = "#22c55e";
+  ctx.beginPath();
+  ctx.ellipse(centerX, y - 8, 12, 14, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(centerX - 10, y + 2, 20, 16);
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 4, y + 18);
+  ctx.lineTo(centerX - 8, y + 18 + legSwing);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX + 4, y + 18);
+  ctx.lineTo(centerX + 8, y + 18 - legSwing);
+  ctx.stroke();
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 10, y + 8);
+  ctx.lineTo(centerX - 16, y + 8 + armSwing);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX + 10, y + 8);
+  ctx.lineTo(centerX + 16, y + 8 - armSwing);
+  ctx.stroke();
+}
+
+function drawObstacles(w,h){
+  const centerX = w/2;
+  state.obstacles.forEach(obs => {
+    const z = obs.z;
+    const scale = 1 - z;
+    const x = centerX + laneOffsets[obs.lane];
+    const y = h * (0.88 - z * 0.7);
+    const size = 24 + scale * 40;
+    if (obs.type === "rock") {
+      ctx.fillStyle = "#64748b";
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * 0.45, size * 0.32, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (obs.type === "log") {
+      ctx.fillStyle = "#b45309";
+      ctx.beginPath();
+      ctx.roundRect(x - size/2, y - size/4, size, size * 0.5, 8);
+      ctx.fill();
+    } else if (obs.type === "car") {
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.roundRect(x - size/2, y - size/3, size, size * 0.66, 6);
+      ctx.fill();
+      ctx.fillStyle = "rgba(15,23,42,0.8)";
+      ctx.fillRect(x - size/4, y - size/5, size/2, size/5);
+    } else if (obs.type === "water") {
+      ctx.fillStyle = "rgba(14,165,233,0.7)";
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * 0.5, size * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+function drawTornado(w,h){
+  const centerX = w/2;
+  const y = h * 0.88;
+  const size = 100 + (100 - state.tornadoDist) * 1.2;
+  ctx.save();
+  ctx.translate(centerX, y);
+  ctx.rotate(Date.now() * 0.002);
+  ctx.strokeStyle = "rgba(248,113,113,0.5)";
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(248,113,113,0.25)";
+  ctx.lineWidth = 20;
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.7, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function stepObstacles(dt){
+  state.obstacles.forEach(obs => {
+    obs.z -= state.speed * dt;
+  });
+  state.obstacles = state.obstacles.filter(obs => obs.z > -0.1);
+}
+
+function checkCollisions(){
+  const hit = state.obstacles.find(obs => obs.z < 0.08 && Math.abs(obs.lane - state.lane) < 0.1);
+  if (hit) {
+    damagePlayer(10);
+    hit.z = -1;
+  }
+}
+
+function damagePlayer(amount){
+  state.health = Math.max(0, state.health - amount);
+  state.tornadoDist = Math.max(0, state.tornadoDist - amount * 0.8);
+  updateHud();
+  if (state.tornadoDist <= 0 || state.health <= 0) {
+    state.running = false;
+    gameOver.classList.add("show");
+  }
+}
+
+function triggerQuiz(){
+  state.paused = true;
+  state.debrisActive = true;
+  state.debrisVisuals.push({
+    x: state.playerX + (Math.random() * 120 - 60),
+    y: 0.1,
+    size: 10 + Math.random() * 10,
+    rotate: Math.random() * Math.PI
+  });
+  const q = questions[Math.floor(Math.random() * questions.length)];
+  quizPrompt.textContent = q.prompt;
+  quizCode.textContent = q.code;
+  quizAnswers.innerHTML = "";
+  quizStatus.textContent = "Choose the correct answer to dodge.";
+  q.options.forEach((opt, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "answer";
+    btn.textContent = opt;
+    btn.addEventListener("click", () => {
+      const buttons = quizAnswers.querySelectorAll(".answer");
+      buttons.forEach((b, i) => {
+        b.disabled = true;
+        if (i === q.answer) b.classList.add("correct");
+        if (i === idx && i !== q.answer) b.classList.add("wrong");
+      });
+      if (idx === q.answer) {
+        quizStatus.textContent = "Debris dodged.";
+      } else {
+        quizStatus.textContent = "Debris hit! -15 health.";
+        damagePlayer(15);
+      }
+      setTimeout(() => {
+        quizOverlay.classList.remove("show");
+        state.paused = false;
+        state.debrisActive = false;
+        state.debrisVisuals = [];
+      }, 900);
+    });
+    quizAnswers.appendChild(btn);
+  });
+  quizOverlay.classList.add("show");
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - last) / 16.67);
+  last = now;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  if (state.running && !state.paused) {
+    state.tornadoDist = Math.max(0, state.tornadoDist - 0.02 * dt);
+    state.speed = baseSpeed + (100 - state.tornadoDist) * 0.0006;
+    state.debrisTimer -= dt;
+    if (Math.random() < 0.02 * dt) spawnObstacle();
+    state.scroll += 140 * state.speed * dt;
+    stepObstacles(dt);
+    checkCollisions();
+    updateDebris(dt);
+    updateHud();
+  }
+
+  drawBackground(w,h);
+  drawTrees(w,h);
+  drawRoad(w,h);
+  drawObstacles(w,h);
+  drawPlayer(w,h);
+  drawTornado(w,h);
+  drawDebris(w,h);
+
+  requestAnimationFrame(loop);
+}
+
+function drawDebris(w,h){
+  if (!state.debrisVisuals.length) return;
+  const centerX = w/2;
+  state.debrisVisuals.forEach(d => {
+    const x = centerX + Math.cos(d.angle) * d.radius;
+    const y = h * 0.88 + Math.sin(d.angle) * d.radius * 0.35;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(d.rotate);
+    ctx.fillStyle = "rgba(148,163,184,0.8)";
+    ctx.fillRect(-d.size/2, -d.size/2, d.size, d.size);
+    ctx.restore();
+  });
+}
+
+function updateDebris(dt){
+  state.debrisSpawn -= dt;
+  if (state.debrisSpawn <= 0) {
+    state.debrisVisuals.push({
+      angle: Math.random() * Math.PI * 2,
+      radius: roadWidth * (0.18 + Math.random() * 0.18),
+      radiusSpeed: 10 + Math.random() * 14,
+      angleSpeed: 0.8 + Math.random() * 0.6,
+      size: 6 + Math.random() * 10,
+      rotate: Math.random() * Math.PI,
+      spin: 0.6 + Math.random() * 0.4
+    });
+    state.debrisSpawn = 0.5 + Math.random() * 0.6;
+  }
+  state.debrisVisuals.forEach(d => {
+    d.angle += d.angleSpeed * dt * 0.6;
+    d.radius += d.radiusSpeed * dt * 0.15;
+    d.rotate += d.spin * dt;
+  });
+  const maxRadius = roadWidth * 0.9;
+  state.debrisVisuals = state.debrisVisuals.filter(d => d.radius < maxRadius);
+}
+
+function drawTrees(w,h){
+  const centerX = w/2;
+  const leftX = centerX - roadWidth/2 - shoulderWidth - 40;
+  const rightX = centerX + roadWidth/2 + shoulderWidth + 40;
+  const spacing = 140;
+  const scroll = state.scroll * 0.8;
+  for (let i = -2; i < 8; i++) {
+    const baseY = i * spacing;
+    const y = ((baseY + scroll) % (h + spacing)) - spacing * 0.5;
+    const jitter = (Math.sin((i + 1) * 12.9898) * 43758.5453) % 1;
+    const size = 26 + Math.abs(jitter) * 18;
+    drawTree(leftX - size, y, size);
+    drawTree(rightX + size, y + 20, size * 0.9);
+  }
+}
+
+function drawTree(x,y,size){
+  ctx.fillStyle = "#6b4f2a";
+  ctx.fillRect(x - 6, y + size * 0.4, 12, size * 0.5);
+  ctx.fillStyle = "#1b5e2b";
+  ctx.beginPath();
+  ctx.ellipse(x, y + size * 0.2, size * 0.7, size * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+window.addEventListener("keydown", (e) => {
+  const key = e.key.toLowerCase();
+  if (key === "a") {
+    state.laneIndex = Math.max(0, state.laneIndex - 1);
+  }
+  if (key === "d") {
+    state.laneIndex = Math.min(laneOffsets.length - 1, state.laneIndex + 1);
+  }
+  state.playerX = laneOffsets[state.laneIndex];
+  if (key === " " && !state.running) {
+    state.running = true;
+    state.paused = false;
+    startOverlay.classList.remove("show");
+  }
+  if (key === "r" && !state.running) {
+    resetGame();
+  }
+});
+
+window.addEventListener("resize", resize);
+resize();
+resetGame();
+loop(performance.now());
+</script>
+</body>
+</html>
