@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Zipf's Law Simulation</title>
+  <style>
+    :root {
+      --bg-a: #f8f4e8;
+      --bg-b: #e3f0ff;
+      --ink: #14213d;
+      --accent: #ff6b35;
+      --accent-2: #2a9d8f;
+      --panel: rgba(255, 255, 255, 0.84);
+      --stroke: rgba(20, 33, 61, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 700px at 10% -20%, #ffd6c4 0%, transparent 60%),
+        radial-gradient(900px 600px at 110% 0%, #c8f0e8 0%, transparent 58%),
+        linear-gradient(140deg, var(--bg-a), var(--bg-b));
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .app {
+      width: min(1100px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 14px 40px rgba(20, 33, 61, 0.12);
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1.2fr 2fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .controls {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    h1 {
+      font-size: clamp(1.2rem, 2.2vw, 1.7rem);
+      margin: 0 0 8px;
+      letter-spacing: 0.02em;
+    }
+
+    p {
+      margin: 0 0 12px;
+      line-height: 1.4;
+    }
+
+    .control {
+      margin: 10px 0;
+    }
+
+    label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.92rem;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, #ff6b35, #ff8d5f);
+      box-shadow: 0 7px 16px rgba(255, 107, 53, 0.28);
+      transition: transform 120ms ease;
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, #2a9d8f, #49b9ac);
+      box-shadow: 0 7px 16px rgba(42, 157, 143, 0.25);
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .stats {
+      margin-top: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      background: rgba(20, 33, 61, 0.05);
+      border: 1px dashed var(--stroke);
+      padding: 8px;
+      border-radius: 10px;
+    }
+
+    .viz-wrap {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.66);
+      padding: 10px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 420px;
+      display: block;
+      border-radius: 10px;
+    }
+
+    .bottom {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.76);
+      display: grid;
+      gap: 8px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 15px;
+      height: 4px;
+      display: inline-block;
+      border-radius: 3px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 860px) {
+      .top { grid-template-columns: 1fr; }
+      canvas { height: 350px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <aside class="controls">
+        <h1>Zipf's Law Playground</h1>
+        <p>Generate observations from a ranked distribution where probability is proportional to <code>1 / rank^s</code>. When plotted on log-log axes, Zipf-like data forms an approximate line.</p>
+
+        <div class="control">
+          <label for="ranks">Ranks (vocabulary size) <span id="ranksOut">200</span></label>
+          <input id="ranks" type="range" min="30" max="1000" step="10" value="200" />
+        </div>
+
+        <div class="control">
+          <label for="exponent">Zipf exponent s <span id="expOut">1.00</span></label>
+          <input id="exponent" type="range" min="0.4" max="2.0" step="0.05" value="1.0" />
+        </div>
+
+        <div class="control">
+          <label for="samples">Samples per run <span id="samplesOut">20000</span></label>
+          <input id="samples" type="range" min="1000" max="200000" step="1000" value="20000" />
+        </div>
+
+        <div class="buttons">
+          <button id="run">Run Once</button>
+          <button id="burst" class="secondary">Run 10x</button>
+          <button id="reset" class="secondary">Reset</button>
+        </div>
+
+        <div class="stats" id="stats">Waiting for simulation...</div>
+      </aside>
+
+      <section class="viz-wrap">
+        <canvas id="chart" width="760" height="420" aria-label="Zipf plot"></canvas>
+      </section>
+    </section>
+
+    <section class="bottom">
+      <div class="legend">
+        <span><span class="swatch" style="background:#ff6b35"></span>Observed frequencies</span>
+        <span><span class="swatch" style="background:#2a9d8f"></span>Reference slope from fitted line</span>
+      </div>
+      <p>This simulation uses inverse transform sampling over a discrete Zipf distribution. Fit quality improves as sample count grows.</p>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+
+    const ranksInput = document.getElementById('ranks');
+    const expInput = document.getElementById('exponent');
+    const samplesInput = document.getElementById('samples');
+
+    const ranksOut = document.getElementById('ranksOut');
+    const expOut = document.getElementById('expOut');
+    const samplesOut = document.getElementById('samplesOut');
+
+    const runBtn = document.getElementById('run');
+    const burstBtn = document.getElementById('burst');
+    const resetBtn = document.getElementById('reset');
+    const stats = document.getElementById('stats');
+
+    let counts = [];
+    let cdf = [];
+    let state = {
+      n: Number(ranksInput.value),
+      s: Number(expInput.value),
+      draws: Number(samplesInput.value),
+      totalDraws: 0
+    };
+
+    function updateOutputs() {
+      ranksOut.textContent = ranksInput.value;
+      expOut.textContent = Number(expInput.value).toFixed(2);
+      samplesOut.textContent = Number(samplesInput.value).toLocaleString();
+    }
+
+    function buildCdf(n, s) {
+      const w = new Array(n);
+      let sum = 0;
+      for (let r = 1; r <= n; r++) {
+        const v = 1 / Math.pow(r, s);
+        w[r - 1] = v;
+        sum += v;
+      }
+      const out = new Array(n);
+      let acc = 0;
+      for (let i = 0; i < n; i++) {
+        acc += w[i] / sum;
+        out[i] = acc;
+      }
+      out[n - 1] = 1;
+      return out;
+    }
+
+    function sampleFromCdf(c) {
+      const u = Math.random();
+      let lo = 0;
+      let hi = c.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (u <= c[mid]) hi = mid;
+        else lo = mid + 1;
+      }
+      return lo;
+    }
+
+    function resetSimulation() {
+      state.n = Number(ranksInput.value);
+      state.s = Number(expInput.value);
+      state.draws = Number(samplesInput.value);
+      state.totalDraws = 0;
+      counts = new Array(state.n).fill(0);
+      cdf = buildCdf(state.n, state.s);
+      render();
+      setStats(NaN, NaN, NaN);
+    }
+
+    function runOnce(mult = 1) {
+      const draws = Number(samplesInput.value) * mult;
+      if (state.n !== Number(ranksInput.value) || state.s !== Number(expInput.value)) {
+        resetSimulation();
+      }
+      for (let i = 0; i < draws; i++) {
+        const idx = sampleFromCdf(cdf);
+        counts[idx] += 1;
+      }
+      state.totalDraws += draws;
+      const fit = linearFitLogLog(counts);
+      render(fit);
+      setStats(fit.slope, fit.intercept, fit.r2);
+    }
+
+    function linearFitLogLog(data) {
+      const pts = [];
+      for (let i = 0; i < data.length; i++) {
+        const f = data[i];
+        if (f > 0) {
+          pts.push({ x: Math.log(i + 1), y: Math.log(f) });
+        }
+      }
+      if (pts.length < 2) return { slope: NaN, intercept: NaN, r2: NaN };
+
+      let sx = 0, sy = 0;
+      for (const p of pts) {
+        sx += p.x;
+        sy += p.y;
+      }
+      const mx = sx / pts.length;
+      const my = sy / pts.length;
+
+      let num = 0, den = 0;
+      for (const p of pts) {
+        const dx = p.x - mx;
+        num += dx * (p.y - my);
+        den += dx * dx;
+      }
+      const slope = num / den;
+      const intercept = my - slope * mx;
+
+      let ssRes = 0, ssTot = 0;
+      for (const p of pts) {
+        const pred = slope * p.x + intercept;
+        ssRes += Math.pow(p.y - pred, 2);
+        ssTot += Math.pow(p.y - my, 2);
+      }
+      const r2 = ssTot > 0 ? 1 - ssRes / ssTot : NaN;
+
+      return { slope, intercept, r2 };
+    }
+
+    function clear() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function render(fit = null) {
+      clear();
+      const margin = { l: 62, r: 18, t: 18, b: 48 };
+      const W = canvas.width;
+      const H = canvas.height;
+      const x0 = margin.l;
+      const y0 = H - margin.b;
+      const w = W - margin.l - margin.r;
+      const h = H - margin.t - margin.b;
+
+      ctx.fillStyle = 'rgba(20,33,61,0.03)';
+      ctx.fillRect(x0, margin.t, w, h);
+
+      const maxRank = counts.length || Number(ranksInput.value);
+      const maxCount = Math.max(1, ...counts);
+
+      const lxMin = Math.log(1);
+      const lxMax = Math.log(maxRank);
+      const lyMin = Math.log(1);
+      const lyMax = Math.log(Math.max(2, maxCount));
+
+      const px = (rank) => x0 + ((Math.log(rank) - lxMin) / (lxMax - lxMin || 1)) * w;
+      const py = (freq) => y0 - ((Math.log(Math.max(1, freq)) - lyMin) / (lyMax - lyMin || 1)) * h;
+
+      ctx.strokeStyle = 'rgba(20,33,61,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + w, y0);
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0, margin.t);
+      ctx.stroke();
+
+      drawTicks(px, py, maxRank, maxCount, x0, y0, w, h);
+
+      ctx.strokeStyle = '#ff6b35';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let r = 1; r <= counts.length; r++) {
+        const f = counts[r - 1];
+        if (f <= 0) continue;
+        const X = px(r);
+        const Y = py(f);
+        if (!started) {
+          ctx.moveTo(X, Y);
+          started = true;
+        } else {
+          ctx.lineTo(X, Y);
+        }
+      }
+      ctx.stroke();
+
+      if (fit && Number.isFinite(fit.slope)) {
+        const f1 = Math.exp(fit.intercept + fit.slope * Math.log(1));
+        const fn = Math.exp(fit.intercept + fit.slope * Math.log(maxRank));
+        ctx.strokeStyle = '#2a9d8f';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([7, 6]);
+        ctx.beginPath();
+        ctx.moveTo(px(1), py(f1));
+        ctx.lineTo(px(maxRank), py(fn));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.fillStyle = '#14213d';
+      ctx.font = '12px ui-monospace, Menlo, monospace';
+      ctx.fillText('log(rank)', x0 + w / 2 - 24, H - 12);
+
+      ctx.save();
+      ctx.translate(14, margin.t + h / 2 + 25);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('log(frequency)', 0, 0);
+      ctx.restore();
+    }
+
+    function drawTicks(px, py, maxRank, maxCount, x0, y0, w, h) {
+      ctx.fillStyle = 'rgba(20,33,61,0.72)';
+      ctx.font = '11px ui-monospace, Menlo, monospace';
+      const xTicks = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].filter(v => v <= maxRank);
+      const yTicks = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 5000, 10000, 50000].filter(v => v <= Math.max(1, maxCount));
+
+      ctx.strokeStyle = 'rgba(20,33,61,0.08)';
+      ctx.lineWidth = 1;
+
+      for (const t of xTicks) {
+        const X = px(t);
+        ctx.beginPath();
+        ctx.moveTo(X, y0);
+        ctx.lineTo(X, y0 + 4);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(X, y0);
+        ctx.lineTo(X, y0 - h);
+        ctx.stroke();
+
+        ctx.fillText(String(t), X - 7, y0 + 16);
+      }
+
+      for (const t of yTicks) {
+        const Y = py(t);
+        ctx.beginPath();
+        ctx.moveTo(x0 - 4, Y);
+        ctx.lineTo(x0, Y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(x0, Y);
+        ctx.lineTo(x0 + w, Y);
+        ctx.stroke();
+
+        ctx.fillText(String(t), 18, Y + 4);
+      }
+    }
+
+    function setStats(slope, intercept, r2) {
+      const estS = Number.isFinite(slope) ? (-slope).toFixed(3) : 'n/a';
+      const slopeVal = Number.isFinite(slope) ? slope.toFixed(3) : 'n/a';
+      const intVal = Number.isFinite(intercept) ? intercept.toFixed(3) : 'n/a';
+      const r2Val = Number.isFinite(r2) ? r2.toFixed(4) : 'n/a';
+      stats.textContent = [
+        `draws total   : ${state.totalDraws.toLocaleString()}`,
+        `fit slope     : ${slopeVal}`,
+        `estimated s   : ${estS}`,
+        `intercept     : ${intVal}`,
+        `R^2           : ${r2Val}`,
+        `expected s    : ${state.s.toFixed(2)}`
+      ].join('\n');
+    }
+
+    [ranksInput, expInput, samplesInput].forEach(el => {
+      el.addEventListener('input', () => {
+        updateOutputs();
+        if (el !== samplesInput) {
+          resetSimulation();
+        }
+      });
+    });
+
+    runBtn.addEventListener('click', () => runOnce(1));
+    burstBtn.addEventListener('click', () => runOnce(10));
+    resetBtn.addEventListener('click', resetSimulation);
+
+    updateOutputs();
+    resetSimulation();
+  </script>
+</body>
+</html>

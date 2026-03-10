@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pipeworks: Pro Tools Signal Flow</title>
+    <style>
+      :root {
+        --ink: #1b1b1b;
+        --muted: #5e5e5e;
+        --bg: #efe9e1;
+        --panel: #fff7ed;
+        --accent: #0f5f7a;
+        --accent-2: #c8702a;
+        --pipe: #2d2d2d;
+        --ok: #1f7a4b;
+        --warn: #b8482b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 20% 10%, rgba(15, 95, 122, 0.08), transparent 45%),
+          radial-gradient(circle at 80% 20%, rgba(200, 112, 42, 0.08), transparent 45%),
+          var(--bg);
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 18px 36px;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 36px);
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(260px, 320px) 1fr;
+        gap: 16px;
+        margin-top: 16px;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+      }
+      .card h2 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: rgba(15, 95, 122, 0.12);
+        color: var(--accent);
+      }
+      .btns {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      button {
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        background: #fff;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      canvas {
+        width: 100%;
+        height: 520px;
+        display: block;
+        background: #fffdf9;
+        border-radius: 14px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      @media (max-width: 520px) {
+        .legend {
+          grid-template-columns: 1fr;
+        }
+      }
+      .term {
+        padding: 8px;
+        border-radius: 10px;
+        background: #fffdf8;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      .term strong {
+        display: block;
+        color: var(--ink);
+        margin-bottom: 4px;
+      }
+      .tip {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 10px;
+      }
+      .kbd {
+        font-family: "Courier New", monospace;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Pipeworks: Pro Tools Signal Flow</h1>
+        <div class="sub">Connect the pipes to build a clean, correct signal path.</div>
+      </header>
+
+      <div class="layout">
+        <section class="card">
+          <h2>Goal</h2>
+          <div class="status">
+            <span>Connections:</span>
+            <span class="pill" id="progress">0 / 8 correct</span>
+            <span class="pill" id="state">Build the chain</span>
+          </div>
+          <div class="btns">
+            <button id="reset">Reset Pipes</button>
+            <button id="auto">Show Correct Flow</button>
+          </div>
+          <p class="tip">
+            Click two nodes to connect them. Click a connected pipe to remove it.
+            Press <span class="kbd">R</span> to reset.
+          </p>
+
+          <h2>Key Terms</h2>
+          <div class="legend">
+            <div class="term">
+              <strong>Insert</strong>
+              Processor placed directly in the channel strip (EQ, compressor).
+            </div>
+            <div class="term">
+              <strong>Send</strong>
+              Copies signal to an Aux/Bus without interrupting the main path.
+            </div>
+            <div class="term">
+              <strong>Bus</strong>
+              Shared internal path that routes multiple tracks to a destination.
+            </div>
+            <div class="term">
+              <strong>Gain Staging</strong>
+              Keeping levels healthy from input to output to avoid clipping.
+            </div>
+            <div class="term">
+              <strong>ADC/DAC</strong>
+              Converts analog to digital and digital back to analog.
+            </div>
+            <div class="term">
+              <strong>Fader</strong>
+              Controls channel output level after inserts and EQ.
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Pipeworks Console</h2>
+          <canvas id="board" width="980" height="520"></canvas>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("board");
+      const ctx = canvas.getContext("2d");
+      const progressEl = document.getElementById("progress");
+      const stateEl = document.getElementById("state");
+      const resetBtn = document.getElementById("reset");
+      const autoBtn = document.getElementById("auto");
+
+      const nodes = [
+        { id: "mic", label: "Mic", x: 90, y: 110 },
+        { id: "pre", label: "Preamp", x: 230, y: 110 },
+        { id: "adc", label: "A/D", x: 370, y: 110 },
+        { id: "input", label: "Input", x: 520, y: 110 },
+        { id: "strip", label: "Channel Strip", x: 680, y: 110 },
+        { id: "fader", label: "Fader", x: 680, y: 260 },
+        { id: "bus", label: "Bus", x: 520, y: 260 },
+        { id: "master", label: "Master", x: 370, y: 260 },
+        { id: "dac", label: "D/A", x: 230, y: 260 },
+        { id: "mon", label: "Monitors", x: 90, y: 260 },
+      ];
+
+      const requiredEdges = [
+        ["mic", "pre"],
+        ["pre", "adc"],
+        ["adc", "input"],
+        ["input", "strip"],
+        ["strip", "fader"],
+        ["fader", "bus"],
+        ["bus", "master"],
+        ["master", "dac"],
+        ["dac", "mon"],
+      ];
+
+      const edges = new Set();
+      let selected = null;
+      let flowTime = 0;
+
+      function edgeKey(a, b) {
+        return `${a}|${b}`;
+      }
+      function edgeExists(a, b) {
+        return edges.has(edgeKey(a, b)) || edges.has(edgeKey(b, a));
+      }
+      function toggleEdge(a, b) {
+        const key1 = edgeKey(a, b);
+        const key2 = edgeKey(b, a);
+        if (edges.has(key1)) {
+          edges.delete(key1);
+          return;
+        }
+        if (edges.has(key2)) {
+          edges.delete(key2);
+          return;
+        }
+        edges.add(key1);
+      }
+
+      function isCorrectEdge(a, b) {
+        return requiredEdges.some(
+          ([from, to]) => (from === a && to === b) || (from === b && to === a),
+        );
+      }
+
+      function correctCount() {
+        let count = 0;
+        edges.forEach((e) => {
+          const [a, b] = e.split("|");
+          if (isCorrectEdge(a, b)) count++;
+        });
+        return count;
+      }
+
+      function hasFullCorrectChain() {
+        return requiredEdges.every(([a, b]) => edgeExists(a, b));
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // background pipes grid
+        ctx.strokeStyle = "rgba(0,0,0,0.04)";
+        for (let x = 40; x < canvas.width; x += 80) {
+          ctx.beginPath();
+          ctx.moveTo(x, 20);
+          ctx.lineTo(x, canvas.height - 20);
+          ctx.stroke();
+        }
+
+        // draw edges
+        edges.forEach((e) => {
+          const [a, b] = e.split("|");
+          const na = nodes.find((n) => n.id === a);
+          const nb = nodes.find((n) => n.id === b);
+          const good = isCorrectEdge(a, b);
+          ctx.strokeStyle = good ? "#1f7a4b" : "#b8482b";
+          ctx.lineWidth = 6;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(na.x, na.y);
+          ctx.lineTo(nb.x, nb.y);
+          ctx.stroke();
+
+          ctx.strokeStyle = "#2b2b2b";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(na.x, na.y);
+          ctx.lineTo(nb.x, nb.y);
+          ctx.stroke();
+        });
+
+        // draw nodes
+        nodes.forEach((n) => {
+          ctx.fillStyle = selected === n.id ? "#c8702a" : "#0f5f7a";
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 24, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#1b1b1b";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = "#fff";
+          ctx.font = "12px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(n.label, n.x, n.y);
+        });
+
+        // animate flow through all connected edges
+        if (edges.size > 0) {
+          let i = 0;
+          edges.forEach((e) => {
+            const [a, b] = e.split("|");
+            const na = nodes.find((n) => n.id === a);
+            const nb = nodes.find((n) => n.id === b);
+            const t = (flowTime + i * 0.12) % 1;
+            const x = na.x + (nb.x - na.x) * t;
+            const y = na.y + (nb.y - na.y) * t;
+            ctx.fillStyle = "#f6d25c";
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            i += 1;
+          });
+          flowTime = (flowTime + 0.008) % 1;
+        }
+
+        // UI status
+        const count = correctCount();
+        progressEl.textContent = `${count} / ${requiredEdges.length} correct`;
+        if (hasFullCorrectChain()) {
+          stateEl.textContent = "Signal flowing";
+          stateEl.style.background = "rgba(31, 122, 75, 0.15)";
+          stateEl.style.color = "var(--ok)";
+        } else {
+          stateEl.textContent = "Build the chain";
+          stateEl.style.background = "rgba(15, 95, 122, 0.12)";
+          stateEl.style.color = "var(--accent)";
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      function getNodeAt(x, y) {
+        return nodes.find((n) => {
+          const dx = n.x - x;
+          const dy = n.y - y;
+          return Math.hypot(dx, dy) <= 26;
+        });
+      }
+
+      function getEdgeAt(x, y) {
+        for (const e of edges) {
+          const [a, b] = e.split("|");
+          const na = nodes.find((n) => n.id === a);
+          const nb = nodes.find((n) => n.id === b);
+          const dist =
+            Math.abs((nb.y - na.y) * x - (nb.x - na.x) * y + nb.x * na.y - nb.y * na.x) /
+            Math.hypot(nb.y - na.y, nb.x - na.x);
+          const minX = Math.min(na.x, nb.x) - 10;
+          const maxX = Math.max(na.x, nb.x) + 10;
+          const minY = Math.min(na.y, nb.y) - 10;
+          const maxY = Math.max(na.y, nb.y) + 10;
+          if (dist < 8 && x >= minX && x <= maxX && y >= minY && y <= maxY) {
+            return e;
+          }
+        }
+        return null;
+      }
+
+      canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+        const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+        const edge = getEdgeAt(x, y);
+        if (edge) {
+          edges.delete(edge);
+          selected = null;
+          return;
+        }
+
+        const node = getNodeAt(x, y);
+        if (!node) {
+          selected = null;
+          return;
+        }
+        if (!selected) {
+          selected = node.id;
+          return;
+        }
+        if (selected === node.id) {
+          selected = null;
+          return;
+        }
+        toggleEdge(selected, node.id);
+        if (!e.shiftKey) {
+          selected = null;
+        }
+      });
+
+      resetBtn.addEventListener("click", () => {
+        edges.clear();
+        selected = null;
+      });
+
+      autoBtn.addEventListener("click", () => {
+        edges.clear();
+        requiredEdges.forEach(([a, b]) => edges.add(edgeKey(a, b)));
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key.toLowerCase() === "r") {
+          edges.clear();
+          selected = null;
+        }
+      });
+
+      draw();
+    </script>
+  </body>
+</html>

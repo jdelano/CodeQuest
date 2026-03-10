@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reversi DrawGrid Simulator</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: rgba(255, 251, 245, 0.88);
+      --ink: #1f1b16;
+      --muted: #6c6256;
+      --accent: #a63a2b;
+      --line: #d5c5b0;
+      --shadow: 0 20px 50px rgba(67, 46, 20, 0.14);
+      --radius: 18px;
+      --console-bg: #100f0d;
+      --console-ink: #f5efe3;
+      --console-dim: #8d8376;
+      --cursor-bg: rgba(255, 145, 77, 0.36);
+      --cursor-ring: #ffb26f;
+      --selected-bg: rgba(110, 186, 173, 0.28);
+      --selected-ring: #7ad0c2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(166, 58, 43, 0.14), transparent 28%),
+        radial-gradient(circle at right 20% top 10%, rgba(44, 90, 76, 0.14), transparent 24%),
+        linear-gradient(180deg, #fbf7f0 0%, var(--bg) 100%);
+    }
+
+    .shell {
+      width: min(1240px, calc(100vw - 32px));
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .panel {
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(133, 104, 70, 0.14);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      padding: 24px;
+      position: sticky;
+      top: 24px;
+      height: fit-content;
+    }
+
+    h1, h2 {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      margin-bottom: 12px;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .intro {
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    input[type="number"] {
+      width: 78px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: white;
+      font: inherit;
+      color: var(--ink);
+    }
+
+    .actions,
+    .legend,
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 140ms ease, background 140ms ease, opacity 140ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: default;
+      transform: none;
+      opacity: 0.45;
+    }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .secondary {
+      background: #e8ddcf;
+      color: var(--ink);
+    }
+
+    .main {
+      padding: 20px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(166, 58, 43, 0.08);
+      color: #6f2b1f;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .console-wrap {
+      position: relative;
+      overflow: auto;
+      padding: 16px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #191715 0%, var(--console-bg) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .console-grid {
+      display: inline-grid;
+      gap: 0;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 16px;
+      line-height: 1.15;
+      color: var(--console-ink);
+      user-select: none;
+    }
+
+    .char-row {
+      display: flex;
+    }
+
+    .char {
+      width: 1ch;
+      height: 1.15em;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      border-radius: 2px;
+      color: var(--console-ink);
+      cursor: pointer;
+    }
+
+    .char.blank {
+      color: var(--console-dim);
+    }
+
+    .char.cursor {
+      background: var(--cursor-bg);
+      box-shadow: inset 0 0 0 1px var(--cursor-ring);
+    }
+
+    .char.selected {
+      background: var(--selected-bg);
+      box-shadow: inset 0 0 0 1px var(--selected-ring);
+    }
+
+    .char.cursor.selected {
+      background:
+        linear-gradient(135deg, var(--cursor-bg) 0 50%, var(--selected-bg) 50% 100%);
+      box-shadow:
+        inset 0 0 0 1px var(--cursor-ring),
+        inset 0 0 0 2px rgba(122, 208, 194, 0.42);
+    }
+
+    .tooltip {
+      position: absolute;
+      z-index: 2;
+      min-width: 180px;
+      max-width: 240px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 249, 241, 0.96);
+      color: var(--ink);
+      border: 1px solid rgba(133, 104, 70, 0.16);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+      font-size: 0.9rem;
+      line-height: 1.35;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      padding: 18px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(133, 104, 70, 0.14);
+    }
+
+    .code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92rem;
+      white-space: pre-wrap;
+      line-height: 1.55;
+      color: #2f2921;
+    }
+
+    .trace {
+      display: grid;
+      gap: 10px;
+      font-size: 0.95rem;
+    }
+
+    .trace strong {
+      color: var(--ink);
+    }
+
+    .legend {
+      margin-top: 14px;
+    }
+
+    .legend span {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(232, 221, 207, 0.86);
+      font-size: 0.9rem;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        position: static;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel controls">
+      <div class="intro">
+        <h1>DrawGrid Simulator</h1>
+        <p>This version steps through each individual character write. Students can move forward or backward one console cell at a time, see the active cursor position, and click any character to inspect its coordinates.</p>
+      </div>
+
+      <div class="grid">
+        <label for="size">
+          Board size
+          <div class="range-row">
+            <input id="size" type="range" min="2" max="10" value="8">
+            <input id="sizeNumber" type="number" min="2" max="10" value="8">
+          </div>
+        </label>
+
+        <label for="cellWidth">
+          CELL_WIDTH
+          <div class="range-row">
+            <input id="cellWidth" type="range" min="1" max="7" value="3">
+            <input id="cellWidthNumber" type="number" min="1" max="7" value="3">
+          </div>
+        </label>
+
+        <label for="cellHeight">
+          CELL_HEIGHT
+          <div class="range-row">
+            <input id="cellHeight" type="range" min="1" max="4" value="1">
+            <input id="cellHeightNumber" type="number" min="1" max="4" value="1">
+          </div>
+        </label>
+
+        <label for="anchorX">
+          Anchor X spaces
+          <div class="range-row">
+            <input id="anchorX" type="range" min="0" max="8" value="2">
+            <input id="anchorXNumber" type="number" min="0" max="8" value="2">
+          </div>
+        </label>
+
+        <label for="anchorY">
+          Anchor Y blank lines
+          <div class="range-row">
+            <input id="anchorY" type="range" min="0" max="5" value="1">
+            <input id="anchorYNumber" type="number" min="0" max="5" value="1">
+          </div>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="prevButton" class="secondary" type="button">Back</button>
+        <button id="nextButton" class="primary" type="button">Forward</button>
+        <button id="playButton" class="secondary" type="button">Play</button>
+        <button id="resetButton" class="secondary" type="button">Reset</button>
+      </div>
+
+      <div class="legend">
+        <span>orange = current cursor</span>
+        <span>teal = clicked character</span>
+        <span>step = one character write</span>
+      </div>
+    </section>
+
+    <main class="panel main">
+      <div class="topbar">
+        <div class="pill" id="status">Operation 0 of 0</div>
+        <div class="nav">
+          <div class="pill" id="cursorSummary">Cursor: not started</div>
+          <div class="pill" id="selectionSummary">Selected: none</div>
+        </div>
+      </div>
+
+      <div class="console-wrap" id="consoleWrap">
+        <div id="consoleGrid" class="console-grid" aria-live="polite"></div>
+        <div id="tooltip" class="tooltip" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="cards">
+        <section class="card">
+          <h2>Loop Idea</h2>
+          <div class="code" id="pseudoCode"></div>
+        </section>
+
+        <section class="card">
+          <h2>Current Step</h2>
+          <div class="trace" id="tracePanel"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const controls = [
+      ["size", "sizeNumber"],
+      ["cellWidth", "cellWidthNumber"],
+      ["cellHeight", "cellHeightNumber"],
+      ["anchorX", "anchorXNumber"],
+      ["anchorY", "anchorYNumber"]
+    ];
+
+    const state = {
+      size: 8,
+      cellWidth: 3,
+      cellHeight: 1,
+      anchorX: 2,
+      anchorY: 1,
+      operationIndex: 0,
+      playing: false,
+      timerId: null,
+      selectedCell: null
+    };
+
+    const statusEl = document.getElementById("status");
+    const cursorSummaryEl = document.getElementById("cursorSummary");
+    const selectionSummaryEl = document.getElementById("selectionSummary");
+    const consoleWrapEl = document.getElementById("consoleWrap");
+    const consoleGridEl = document.getElementById("consoleGrid");
+    const tooltipEl = document.getElementById("tooltip");
+    const pseudoCodeEl = document.getElementById("pseudoCode");
+    const traceEl = document.getElementById("tracePanel");
+    const prevButton = document.getElementById("prevButton");
+    const nextButton = document.getElementById("nextButton");
+    const playButton = document.getElementById("playButton");
+    const resetButton = document.getElementById("resetButton");
+
+    function syncPair(rangeId, numberId) {
+      const range = document.getElementById(rangeId);
+      const number = document.getElementById(numberId);
+
+      function apply(value) {
+        const min = Number(range.min);
+        const max = Number(range.max);
+        const numeric = Math.max(min, Math.min(max, Number(value) || min));
+        range.value = numeric;
+        number.value = numeric;
+        state[rangeId] = numeric;
+        stopPlayback();
+        state.operationIndex = 0;
+        state.selectedCell = null;
+        build();
+      }
+
+      range.addEventListener("input", () => apply(range.value));
+      number.addEventListener("input", () => apply(number.value));
+    }
+
+    function createMatrix(rows, cols) {
+      return Array.from({ length: rows }, () => Array(cols).fill(" "));
+    }
+
+    function describeChar(char) {
+      if (char === " ") {
+        return "space";
+      }
+      if (char === "+") {
+        return "corner marker";
+      }
+      if (char === "-") {
+        return "horizontal edge";
+      }
+      if (char === "|") {
+        return "vertical edge";
+      }
+      if (/^[A-Z]$/.test(char)) {
+        return "row axis label";
+      }
+      if (/^[0-9]$/.test(char)) {
+        return "column axis label";
+      }
+      return "character";
+    }
+
+    function buildModel() {
+      const size = state.size;
+      const cellWidth = state.cellWidth;
+      const cellHeight = state.cellHeight;
+      const gridWidth = size * (cellWidth + 1) + 1;
+      const gridHeight = size * (cellHeight + 1) + 1;
+      const totalWidth = state.anchorX + 1 + gridWidth + 2;
+      const totalHeight = state.anchorY + 1 + gridHeight + 1;
+      const left = state.anchorX + 1;
+      const top = state.anchorY + 1;
+      const maxRow = String.fromCharCode("A".charCodeAt(0) + size - 1);
+      const operations = [];
+
+      function pushOperation(x, y, char, description, detail, method, kind) {
+        operations.push({ x, y, char, description, detail, method, kind });
+      }
+
+      for (let col = 0; col < size; col += 1) {
+        const label = String(col + 1);
+        const center = left + 1 + col * (cellWidth + 1) + Math.floor(cellWidth / 2);
+        const start = center - Math.floor((label.length - 1) / 2);
+        for (let i = 0; i < label.length; i += 1) {
+          pushOperation(
+            start + i,
+            top - 1,
+            label[i],
+            `Write column label ${label}.`,
+            `This is part of DrawGridAxes for board column ${col + 1}.`,
+            "DrawGridAxes",
+            "axis"
+          );
+        }
+      }
+
+      for (let row = 0; row < size; row += 1) {
+        const letter = String.fromCharCode("A".charCodeAt(0) + row);
+        const center = top + 1 + row * (cellHeight + 1) + Math.floor(cellHeight / 2);
+        pushOperation(
+          left - 1,
+          center,
+          letter,
+          `Write row label ${letter}.`,
+          `This is part of DrawGridAxes for board row ${row + 1}.`,
+          "DrawGridAxes",
+          "axis"
+        );
+      }
+
+      for (let row = 0; row < size; row += 1) {
+        const yTop = top + row * (cellHeight + 1);
+
+        for (let col = 0; col < size; col += 1) {
+          const x = left + col * (cellWidth + 1);
+          pushOperation(
+            x,
+            yTop,
+            "+",
+            `Start the top border of board cell (${row + 1}, ${col + 1}) with a corner.`,
+            `This is the '+' at the left side of board row ${row + 1}, column ${col + 1}.`,
+            "DrawGrid",
+            "corner"
+          );
+
+          for (let fill = 1; fill <= cellWidth; fill += 1) {
+            pushOperation(
+              x + fill,
+              yTop,
+              "-",
+              `Fill the horizontal edge for board cell (${row + 1}, ${col + 1}).`,
+              `This '-' is inside the top border of that cell.`,
+              "DrawGrid",
+              "horizontal"
+            );
+          }
+        }
+
+        pushOperation(
+          left + size * (cellWidth + 1),
+          yTop,
+          "+",
+          `Close the top border of board row ${row + 1}.`,
+          "This final '+' ends the border line for that board row.",
+          "DrawGrid",
+          "corner"
+        );
+
+        for (let inner = 1; inner <= cellHeight; inner += 1) {
+          const yInner = yTop + inner;
+
+          for (let col = 0; col <= size; col += 1) {
+            const x = left + col * (cellWidth + 1);
+            pushOperation(
+              x,
+              yInner,
+              "|",
+              `Draw a vertical border at board row ${row + 1}, interior line ${inner}.`,
+              `Each '|' appears every ${cellWidth + 1} columns across the console line.`,
+              "DrawGrid",
+              "vertical"
+            );
+          }
+        }
+      }
+
+      const bottomY = top + size * (cellHeight + 1);
+      for (let col = 0; col < size; col += 1) {
+        const x = left + col * (cellWidth + 1);
+        pushOperation(
+          x,
+          bottomY,
+          "+",
+          `Start the final bottom border at board column ${col + 1}.`,
+          "The last line mirrors the top border pattern.",
+          "DrawGrid",
+          "corner"
+        );
+
+        for (let fill = 1; fill <= cellWidth; fill += 1) {
+          pushOperation(
+            x + fill,
+            bottomY,
+            "-",
+            `Fill the final bottom border for board column ${col + 1}.`,
+            "This '-' closes the board on the last console line.",
+            "DrawGrid",
+            "horizontal"
+          );
+        }
+      }
+
+      pushOperation(
+        left + size * (cellWidth + 1),
+        bottomY,
+        "+",
+        "Place the final bottom-right corner.",
+        "This is the last character needed to finish the grid.",
+        "DrawGrid",
+        "corner"
+      );
+
+      return {
+        rows: totalHeight,
+        cols: totalWidth,
+        operations
+      };
+    }
+
+    function buildSnapshot(model, count) {
+      const matrix = createMatrix(model.rows, model.cols);
+      for (let i = 0; i < count; i += 1) {
+        const op = model.operations[i];
+        matrix[op.y][op.x] = op.char;
+      }
+      return matrix;
+    }
+
+    function renderGrid(matrix, activeOp) {
+      const fragment = document.createDocumentFragment();
+      consoleGridEl.innerHTML = "";
+
+      for (let row = 0; row < matrix.length; row += 1) {
+        const rowEl = document.createElement("div");
+        rowEl.className = "char-row";
+
+        for (let col = 0; col < matrix[row].length; col += 1) {
+          const char = matrix[row][col];
+          const cellEl = document.createElement("span");
+          const isBlank = char === " ";
+          const isCursor = activeOp && activeOp.x === col && activeOp.y === row;
+          const isSelected = state.selectedCell && state.selectedCell.x === col && state.selectedCell.y === row;
+
+          cellEl.className = "char";
+          if (isBlank) {
+            cellEl.classList.add("blank");
+          }
+          if (isCursor) {
+            cellEl.classList.add("cursor");
+          }
+          if (isSelected) {
+            cellEl.classList.add("selected");
+          }
+
+          cellEl.dataset.x = String(col);
+          cellEl.dataset.y = String(row);
+          cellEl.textContent = isBlank ? "\u00a0" : char;
+          cellEl.addEventListener("click", () => {
+            state.selectedCell = { x: col, y: row };
+            render();
+          });
+          rowEl.appendChild(cellEl);
+        }
+
+        fragment.appendChild(rowEl);
+      }
+
+      consoleGridEl.appendChild(fragment);
+    }
+
+    function updateTooltip(matrix, activeOp) {
+      if (!state.selectedCell) {
+        tooltipEl.classList.remove("visible");
+        return;
+      }
+
+      const { x, y } = state.selectedCell;
+      const selectedChar = matrix[y]?.[x] ?? " ";
+      const charLabel = selectedChar === " " ? "space" : selectedChar;
+      const cellEl = consoleGridEl.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+
+      if (!cellEl) {
+        tooltipEl.classList.remove("visible");
+        return;
+      }
+
+      const cellRect = cellEl.getBoundingClientRect();
+      const wrapRect = consoleWrapEl.getBoundingClientRect();
+      const left = cellRect.left - wrapRect.left + consoleWrapEl.scrollLeft + 10;
+      const top = cellRect.top - wrapRect.top + consoleWrapEl.scrollTop - 58;
+
+      tooltipEl.innerHTML =
+        `<strong>${charLabel}</strong><br>` +
+        `Console cursor: (<code>x=${x}</code>, <code>y=${y}</code>)<br>` +
+        `Meaning: ${describeChar(selectedChar)}` +
+        (activeOp && activeOp.x === x && activeOp.y === y ? "<br>This is the current write cursor." : "");
+      tooltipEl.style.left = `${Math.max(8, left)}px`;
+      tooltipEl.style.top = `${Math.max(8, top)}px`;
+      tooltipEl.classList.add("visible");
+    }
+
+    function render() {
+      const model = buildModel();
+      const safeIndex = Math.min(Math.max(state.operationIndex, 0), model.operations.length);
+      state.operationIndex = safeIndex;
+
+      const activeOp = safeIndex === 0 ? null : model.operations[safeIndex - 1];
+      const matrix = buildSnapshot(model, safeIndex);
+      renderGrid(matrix, activeOp);
+      updateTooltip(matrix, activeOp);
+
+      statusEl.textContent = `Operation ${safeIndex} of ${model.operations.length}`;
+      cursorSummaryEl.textContent = activeOp
+        ? `Cursor: x=${activeOp.x}, y=${activeOp.y}`
+        : "Cursor: not started";
+
+      if (state.selectedCell) {
+        const selectedChar = matrix[state.selectedCell.y]?.[state.selectedCell.x] ?? " ";
+        selectionSummaryEl.textContent =
+          `Selected: x=${state.selectedCell.x}, y=${state.selectedCell.y}, char=${selectedChar === " " ? "space" : selectedChar}`;
+      } else {
+        selectionSummaryEl.textContent = "Selected: none";
+      }
+
+      prevButton.disabled = safeIndex === 0;
+      nextButton.disabled = safeIndex === model.operations.length;
+
+      pseudoCodeEl.textContent =
+`set start and max console coordinates
+
+for each console row in the grid
+  for each console column in the grid
+    move cursor to that position
+    check: am I on a vertical border?
+    check: am I on a horizontal border?
+
+    if vertical only
+      write '|'
+    else if horizontal only
+      write '-'
+    else if both
+      write '+'`;
+
+      traceEl.innerHTML = activeOp
+        ? `
+          <strong>${activeOp.description}</strong>
+          <div><strong>Method:</strong> ${activeOp.method}</div>
+          <div><strong>Cursor:</strong> <code>x=${activeOp.x}</code>, <code>y=${activeOp.y}</code></div>
+          <div><strong>Writing:</strong> <code>${activeOp.char}</code> (${describeChar(activeOp.char)})</div>
+          <div><strong>Why here:</strong> ${activeOp.detail}</div>
+          <div><strong>Hint:</strong> Treat each console position as a target coordinate. The loops decide which coordinates receive a character.</div>
+        `
+        : `
+          <strong>Start state</strong>
+          <div><strong>Method:</strong> Display</div>
+          <div><strong>Cursor:</strong> not started</div>
+          <div><strong>Focus:</strong> No characters have been written yet.</div>
+          <div><strong>Hint:</strong> Click any character after stepping to inspect its console coordinate.</div>
+        `;
+    }
+
+    function build() {
+      render();
+    }
+
+    function stopPlayback() {
+      state.playing = false;
+      playButton.textContent = "Play";
+      if (state.timerId !== null) {
+        window.clearInterval(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    prevButton.addEventListener("click", () => {
+      stopPlayback();
+      state.operationIndex = Math.max(0, state.operationIndex - 1);
+      render();
+    });
+
+    nextButton.addEventListener("click", () => {
+      const model = buildModel();
+      state.operationIndex = Math.min(model.operations.length, state.operationIndex + 1);
+      render();
+    });
+
+    playButton.addEventListener("click", () => {
+      const model = buildModel();
+      if (state.playing) {
+        stopPlayback();
+        return;
+      }
+
+      if (state.operationIndex >= model.operations.length) {
+        state.operationIndex = 0;
+      }
+
+      state.playing = true;
+      playButton.textContent = "Pause";
+      state.timerId = window.setInterval(() => {
+        const currentModel = buildModel();
+        if (state.operationIndex >= currentModel.operations.length) {
+          stopPlayback();
+          return;
+        }
+        state.operationIndex += 1;
+        render();
+      }, 120);
+    });
+
+    resetButton.addEventListener("click", () => {
+      stopPlayback();
+      state.operationIndex = 0;
+      state.selectedCell = null;
+      render();
+    });
+
+    consoleWrapEl.addEventListener("scroll", () => {
+      const model = buildModel();
+      const activeOp = state.operationIndex === 0 ? null : model.operations[state.operationIndex - 1];
+      const matrix = buildSnapshot(model, state.operationIndex);
+      updateTooltip(matrix, activeOp);
+    });
+
+    controls.forEach(([rangeId, numberId]) => syncPair(rangeId, numberId));
+    build();
+  </script>
+</body>
+</html>
